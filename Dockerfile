@@ -19,6 +19,8 @@ RUN apt-get install -y \
     protobuf-compiler \
     pkg-config
 
+RUN apt-get install -y python3-venv
+
 # Download and install ns3
 RUN wget https://www.nsnam.org/releases/ns-allinone-3.40.tar.bz2 && \
     tar xf ns-allinone-3.40.tar.bz2 && \
@@ -27,7 +29,7 @@ RUN wget https://www.nsnam.org/releases/ns-allinone-3.40.tar.bz2 && \
 WORKDIR /ns-allinone-3.40/ns-3.40
 
 # Clone ns3-gym repository into contrib directory
-RUN mkdir contrib && cd contrib && \
+RUN mkdir -p contrib && cd contrib && \
     git clone https://github.com/tkn-tub/ns3-gym.git opengym && \
     cd opengym && \
     git checkout app-ns-3.36+
@@ -39,8 +41,7 @@ RUN ./ns3 configure --enable-examples && \
 # Install ns3gym python package
 WORKDIR /ns-allinone-3.40/ns-3.40/contrib/opengym
 RUN python3 -m venv ns3gym-venv && \
-    source ./ns3gym-venv/bin/activate && \
-    pip3 install --no-cache-dir ./model/ns3gym
+    ./ns3gym-venv/bin/pip3 install --no-cache-dir ./model/ns3gym
 
 # Set working directory for example execution
 WORKDIR /ns-allinone-3.40/ns-3.40/contrib/opengym/examples/opengym
