@@ -1,5 +1,6 @@
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
+#include "ns3/opengym-module.h"
 #include "ns3/mobility-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/wifi-module.h"
@@ -10,10 +11,34 @@
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("WifiSimulation");
-
 // Variables for statistics
 double totalThroughput = 0;
 uint32_t collisionCount = 0;
+const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"}
+
+Ptr<OpenGymSpace> MyGetObservationSpace(void)
+{
+  uint32_t nodeNum = NodeList::GetNNodes ();
+  float low = 0.0;
+  float high = 100.0;
+  std::vector<uint8_t> shape = {nodeNum,3};
+  std::string dtype = TypeNameGet<float> ();
+  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (low, high, shape, dtype);
+  NS_LOG_UNCOND ("MyGetObservationSpace: " << space);
+  return space;
+}
+
+Ptr<OpenGymSpace> MyGetActionSpace(void)
+{
+  uint32_t nodeNum = NodeList::GetNNodes ();
+  float low = 0.0;
+  float high = 100.0;
+  std::vector<uint32_t> shape = {nodeNum,};
+  std::string dtype = TypeNameGet<uint32_t> ();
+  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (low, high, shape, dtype);
+  NS_LOG_UNCOND ("MyGetActionSpace: " << space);
+  return space;
+}
 
 void PhyTxDrop(Ptr<const Packet> packet, double snr)
 {
