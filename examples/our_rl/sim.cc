@@ -21,7 +21,7 @@ Ptr<OpenGymSpace> MyGetObservationSpace(void)
   uint32_t nodeNum = NodeList::GetNNodes ();
   float low = 0.0;
   float high = 100.0;
-  std::vector<uint8_t> shape = {nodeNum,3};
+  std::vector<uint8_t> shape = {nodeNum,};
   std::string dtype = TypeNameGet<float> ();
   Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (low, high, shape, dtype);
   NS_LOG_UNCOND ("MyGetObservationSpace: " << space);
@@ -40,6 +40,29 @@ Ptr<OpenGymSpace> MyGetActionSpace(void)
   return space;
 }
 
+Ptr<OpenGymDataContainer> MyGetObservation(void)
+{
+  uint32_t nodeNum = NodeList::GetNNodes ();
+  std::vector<uint32_t> shape = {nodeNum,};
+  Ptr<OpenGymBoxContainer<uint32_t> > box = CreateObject<OpenGymBoxContainer<uint32_t> >(shape);
+
+  for (NodeList::Iterator i = NodeList::Begin (); i != NodeList::End (); ++i) {
+    Ptr<Node> node = *i;
+    Ptr<WifiMacQueue> queue = GetQueue (node);
+    uint32_t value = queue->GetNPackets();
+    box->AddValue(value);
+  }
+
+  NS_LOG_UNCOND ("MyGetObservation: " << box);
+  return box;
+}
+
+double MyGetReward(void)
+{
+  return totalThroughput;
+}
+
+
 void PhyTxDrop(Ptr<const Packet> packet, double snr)
 {
     collisionCount++;  // Increase collision count on dropped packets
@@ -52,11 +75,40 @@ void CalculateThroughput()
     Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
 }
 
+bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
+{
+  NS_LOG_UNCOND ("MyExecuteActions: " << action);
+
+  Ptr<OpenGymBoxContainer<uint32_t> > box = DynamicCast<OpenGymBoxContainer<uint32_t> >(action);
+  std::vector<uint32_t> actionVector = box->GetData();
+
+  uint32_t nodeNum = NodeList::GetNNodes ();
+  for (uint32_t i=0; i<nodeNum; i++)
+  {
+    Ptr<Node> node = NodeList::GetNode(i);
+    uint32_t cwSize = actionVector.at(i);
+    SetCw(node, cwSize, cwSize);
+  }
+
+  return true;
+}
+
 void ThroughputMonitor(std::string context, Ptr<const Packet> packet, double snr, WifiMode mode, WifiPreamble preamble)
 {
     totalThroughput += (packet->GetSize() * 8.0) / (1e6); // Convert bytes to Mbps
 }
+bool MyGetGameOver(void)
+{
+  bool isGameOver = false;
+  NS_LOG_UNCOND ("MyGetGameOver: " << isGameOver);
+  return isGameOver;
+}
 
+void ScheduleNextStateRead(double envStepTime, Ptr<OpenGymInterface> openGymInterface)
+{
+  Simulator::Schedule (Seconds(envStepTime), &ScheduleNextStateRead, envStepTime, openGymInterface);
+  openGymInterface->NotifyCurrentState();
+}
 int main(int argc, char *argv[])
 {
     uint32_t nSta = 5;
@@ -123,8 +175,14 @@ int main(int argc, char *argv[])
 
     Config::Connect("/NodeList/*/DeviceList/*/Phy/State/RxOk", MakeCallback(&ThroughputMonitor));
     
-    Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
-
+    Simulator::Schedule (Seconds(0.0), &ScheduleNextStateRead, envStepTime, openGymInterface);
+    Ptr<OpenGymInterface> openGymInterface = CreateObject<OpenGymInterface> (openGymPort);
+    openGymInterface->SetGetActionSpaceCb( MakeCallback (&MyGetActionSpace) );
+    openGymInterface->SetGetObservationSpaceCb( MakeCallback (&MyGetObservationSpace) );
+    openGymInterface->SetGetGameOverCb( MakeCallback (&MyGetGameOver) );
+    openGymInterface->SetGetObservationCb( MakeCallback (&MyGetObservation) );
+    openGymInterface->SetGetRewardCb( MakeCallback (&MyGetReward) );
+    openGymInterface->SetExecuteActionsCb( MakeCallback (&MyExecuteActions) );
     Simulator::Stop(Seconds(simulationTime));
     Simulator::Run();
     Simulator::Destroy();
