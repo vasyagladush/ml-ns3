@@ -82,3 +82,15 @@ for episode in range(episodes):
     iterations.append(i)
 
 env.close()
+
+rewards = np.array(rewards)
+chunks = np.array_split(rewards, episodes)
+mean = np.mean(rewards[disable_learning_after_episode:])
+averages = [sum(chunk) / len(chunk) for chunk in chunks]
+
+print(f"Mean after learning: {mean}")
+plt.plot(averages)
+plt.xlabel("Episode")
+plt.ylabel("Avg. reward")
+plt.title("Average Reward (Episode)")
+plt.show()
