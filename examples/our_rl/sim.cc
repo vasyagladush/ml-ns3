@@ -14,19 +14,20 @@ NS_LOG_COMPONENT_DEFINE("WifiSimulation");
 // Variables for statistics
 double totalThroughput = 0;
 uint32_t collisionCount = 0;
-const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"}
+const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"};
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
   uint32_t nodeNum = NodeList::GetNNodes ();
   float low = 0.0;
   float high = 100.0;
-  std::vector<uint8_t> shape = {nodeNum,};
-  std::string dtype = TypeNameGet<float> ();
+  std::vector<uint32_t> shape = {nodeNum,};
+  std::string dtype = TypeNameGet<uint32_t> ();
   Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (low, high, shape, dtype);
   NS_LOG_UNCOND ("MyGetObservationSpace: " << space);
   return space;
 }
+
 
 Ptr<OpenGymSpace> MyGetActionSpace(void)
 {
@@ -40,6 +41,19 @@ Ptr<OpenGymSpace> MyGetActionSpace(void)
   return space;
 }
 
+Ptr<WifiMacQueue> GetQueue(Ptr<Node> node)
+{
+  Ptr<NetDevice> dev = node->GetDevice (0);
+  Ptr<WifiNetDevice> wifi_dev = DynamicCast<WifiNetDevice> (dev);
+  Ptr<WifiMac> wifi_mac = wifi_dev->GetMac ();
+  PointerValue ptr;
+  
+  wifi_mac->GetAttribute ("BE_Txop", ptr);
+  Ptr<Txop> txop = ptr.Get<Txop> ();
+  Ptr<WifiMacQueue> queue = txop->GetWifiMacQueue ();
+  return queue;
+}
+
 Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
   uint32_t nodeNum = NodeList::GetNNodes ();
@@ -48,7 +62,7 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
 
   for (NodeList::Iterator i = NodeList::Begin (); i != NodeList::End (); ++i) {
     Ptr<Node> node = *i;
-    Ptr<WifiMacQueue> queue = GetQueue (node);
+    Ptr<WifiMacQueue> queue = GetQueue(node);
     uint32_t value = queue->GetNPackets();
     box->AddValue(value);
   }
@@ -57,9 +71,9 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
   return box;
 }
 
-double MyGetReward(void)
+float MyGetReward(void)
 {
-  return totalThroughput;
+  return (float)totalThroughput;
 }
 
 
@@ -73,6 +87,33 @@ void CalculateThroughput()
     std::cout << Simulator::Now().GetSeconds() << "s - Throughput: " << totalThroughput << " Mbps, Collisions: " << collisionCount << std::endl;
     totalThroughput = 0; // Reset for next interval
     Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
+}
+
+bool SetCw(Ptr<Node> node, uint32_t cwMinValue=0, uint32_t cwMaxValue=0)
+{
+  Ptr<NetDevice> dev = node->GetDevice (0);
+  Ptr<WifiNetDevice> wifi_dev = DynamicCast<WifiNetDevice> (dev);
+  Ptr<WifiMac> wifi_mac = wifi_dev->GetMac ();
+  NS_ASSERT(wifi_mac != nullptr);
+  PointerValue ptr;
+  if(!wifi_mac->GetAttributeFailSafe ("BE_Txop", ptr)){
+    NS_LOG_UNCOND("Failed to get Txop");
+    return false;
+  }
+  Ptr<Txop> txop = ptr.Get<Txop> ();
+  NS_ASSERT(txop != nullptr);
+
+  // if both set to the same value then we have uniform backoff?
+  if (cwMinValue != 0) {
+    NS_LOG_DEBUG ("Set CW min: " << cwMinValue);
+    txop->SetMinCw(cwMinValue);
+  }
+
+  if (cwMaxValue != 0) {
+    NS_LOG_DEBUG ("Set CW max: " << cwMaxValue);
+    txop->SetMaxCw(cwMaxValue);
+  }
+  return true;
 }
 
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
@@ -111,8 +152,12 @@ void ScheduleNextStateRead(double envStepTime, Ptr<OpenGymInterface> openGymInte
 }
 int main(int argc, char *argv[])
 {
-    uint32_t nSta = 5;
-    double simulationTime = 10.0; // in seconds
+    int nSta =5;
+    uint32_t simSeed = 1;
+    double simulationTime = 10; //seconds
+    double envStepTime = 0.1; //seconds, ns3gym env step time interval
+    uint32_t openGymPort = 5555;
+    uint32_t testArg = 0;
 
     NodeContainer wifiStaNodes, wifiApNode;
     wifiStaNodes.Create(nSta);
@@ -128,10 +173,10 @@ int main(int argc, char *argv[])
     WifiMacHelper mac;
     Ssid ssid = Ssid("ns3-wifi");
 
-    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false));
+    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false),"QosSupported", BooleanValue(true));
     NetDeviceContainer staDevices = wifi.Install(phy, mac, wifiStaNodes);
 
-    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid),"QosSupported", BooleanValue(true));
     NetDeviceContainer apDevice = wifi.Install(phy, mac, wifiApNode);
 
     MobilityHelper mobility;
@@ -175,7 +220,7 @@ int main(int argc, char *argv[])
 
     Config::Connect("/NodeList/*/DeviceList/*/Phy/State/RxOk", MakeCallback(&ThroughputMonitor));
     
-    Simulator::Schedule (Seconds(0.0), &ScheduleNextStateRead, envStepTime, openGymInterface);
+    
     Ptr<OpenGymInterface> openGymInterface = CreateObject<OpenGymInterface> (openGymPort);
     openGymInterface->SetGetActionSpaceCb( MakeCallback (&MyGetActionSpace) );
     openGymInterface->SetGetObservationSpaceCb( MakeCallback (&MyGetObservationSpace) );
@@ -183,6 +228,7 @@ int main(int argc, char *argv[])
     openGymInterface->SetGetObservationCb( MakeCallback (&MyGetObservation) );
     openGymInterface->SetGetRewardCb( MakeCallback (&MyGetReward) );
     openGymInterface->SetExecuteActionsCb( MakeCallback (&MyExecuteActions) );
+    Simulator::Schedule (Seconds(0.0), &ScheduleNextStateRead, envStepTime, openGymInterface);
     Simulator::Stop(Seconds(simulationTime));
     Simulator::Run();
     Simulator::Destroy();
