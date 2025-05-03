@@ -17,10 +17,11 @@ namespace
 {
   constexpr uint32_t kNumSta = 5;          // number of stations
   constexpr double kSimulationTime = 10.0; // total simulation time (s)
-  constexpr double kEnvStepTime = 1.0;     // gym step interval (s)
-  constexpr uint16_t kOpenGymPort = 5555;  // OpenGym server port
-  constexpr uint32_t kMaxQueueLen = 50;    // max queue length for observations
-  constexpr uint32_t kMaxCw = 1023;        // max contention window for actions
+  constexpr double kEnvStepTime = 0.005;   // gym step interval (s)
+  constexpr uint16_t kOpenGymPort = 5556;  // OpenGym server port
+  constexpr uint32_t kMaxQueueLen = 50;    // max queue length for scaling
+  constexpr uint32_t kStateMax = 100;      // max raw state value
+  constexpr uint32_t kActionCount = 7;     // number of discrete actions
 }
 
 // Variables for runtime statistics
@@ -30,10 +31,9 @@ const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_pr
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
-  uint32_t nodeNum = NodeList::GetNNodes();
-  std::vector<uint32_t> shape = {nodeNum};
-  Ptr<OpenGymMultiDiscreteSpace> space =
-      CreateObject<OpenGymMultiDiscreteSpace>(shape, kMaxQueueLen);
+  // single discrete state: 0..(state_size-1)
+  Ptr<OpenGymDiscreteSpace> space =
+      CreateObject<OpenGymDiscreteSpace>(kStateMax + 1);
   NS_LOG_UNCOND("MyGetObservationSpace: " << space);
   return space;
 }
@@ -53,29 +53,22 @@ Ptr<WifiMacQueue> GetQueue(Ptr<Node> node)
 
 Ptr<OpenGymSpace> MyGetActionSpace(void)
 {
-  // using a single Discrete space: values 0..kMaxCw
+  // discrete action: one CW value for all STAs, 0..kActionCount-1
   Ptr<OpenGymDiscreteSpace> space =
-      CreateObject<OpenGymDiscreteSpace>(kMaxCw + 1);
+      CreateObject<OpenGymDiscreteSpace>(kActionCount);
   NS_LOG_UNCOND("MyGetActionSpace: " << space);
   return space;
 }
 
 Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
-  uint32_t nodeNum = NodeList::GetNNodes();
-  std::vector<uint32_t> shape = {nodeNum};
-  Ptr<OpenGymMultiDiscreteContainer> box =
-      CreateObject<OpenGymMultiDiscreteContainer>(shape);
-
-  for (auto it = NodeList::Begin(); it != NodeList::End(); ++it)
-  {
-    Ptr<Node> node = *it;
-    Ptr<WifiMacQueue> queue = GetQueue(node);
-    uint32_t value = queue->GetNPackets();
-    box->AddValue(value);
-  }
-
-  NS_LOG_UNCOND("MyGetObservation: " << box);
+  // read first STA queue length, scale into [0..kStateMax]
+  Ptr<Node> node = NodeList::GetNode(0);
+  uint32_t qlen = GetQueue(node)->GetNPackets();
+  uint32_t raw = std::min(kStateMax, (qlen * kStateMax) / kMaxQueueLen);
+  Ptr<OpenGymDiscreteContainer> box =
+      CreateObject<OpenGymDiscreteContainer>(raw);
+  NS_LOG_UNCOND("MyGetObservation: " << raw);
   return box;
 }
 
@@ -114,7 +107,6 @@ bool SetCw(Ptr<Node> node, uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
   Ptr<Txop> txop = ptr.Get<Txop>();
   NS_ASSERT(txop != nullptr);
 
-  // if both set to the same value then we have uniform backoff?
   if (cwMinValue != 0)
   {
     NS_LOG_DEBUG("Set CW min: " << cwMinValue);

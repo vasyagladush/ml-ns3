@@ -15,13 +15,19 @@ docker run -it --rm -v ./examples:/ns-allinone-3.40/ns-3.40/contrib/opengym/exam
 3. Activate python venv (probably we can automate this step in the 2nd command):
 
 ```console
-cd .. && source ../ns3gym-venv/bin/activate
+source ./ns3gym-venv/bin/activate
+```
+
+And it might be needed to install some new python libraries, e.g.:
+
+```console
+pip install matplotlib
 ```
 
 4. Run the thing, e.g.
 
 ```console
-cd opengym && ./test.py
+cd examples/our_rl/ql && ./qlearn.py
 ```
 
 5. Stop and exit the container: Ctrl + D

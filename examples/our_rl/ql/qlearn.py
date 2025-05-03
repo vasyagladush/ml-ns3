@@ -3,7 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import ns3env
+from ns3gym import ns3env
 
 # simulation setup
 port = 5556

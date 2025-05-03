@@ -68,7 +68,7 @@ build_lib_example(
 )
 
 build_lib_example(
-  NAME our_rl-ql
+  NAME ql
   SOURCE_FILES our_rl/ql/sim.cc
   LIBRARIES_TO_LINK
     ${libapplications}
@@ -79,7 +79,7 @@ build_lib_example(
 )
 
 build_lib_example(
-  NAME our_rl-dqn
+  NAME dqn
   SOURCE_FILES our_rl/dqn/sim.cc
   LIBRARIES_TO_LINK
     ${libapplications}
