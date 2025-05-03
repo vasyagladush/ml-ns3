@@ -48,8 +48,11 @@ build_lib_example(
   NAME opengym
   SOURCE_FILES opengym/sim.cc
   LIBRARIES_TO_LINK
+    ${libapplications}
     ${libcore}
+    ${libinternet}
     ${libopengym}
+    ${libwifi}
 )
 
 build_lib_example(
