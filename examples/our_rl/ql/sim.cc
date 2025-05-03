@@ -11,22 +11,29 @@
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("WifiSimulation");
-// Variables for statistics
-double totalThroughput = 0;
-uint32_t collisionCount = 0;
-const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"}
 
-Ptr<OpenGymSpace>
-MyGetObservationSpace(void)
+// Named constants for configuration, internal linkage
+namespace
+{
+  constexpr uint32_t kNumSta = 5;          // number of stations
+  constexpr double kSimulationTime = 10.0; // total simulation time (s)
+  constexpr double kEnvStepTime = 1.0;     // gym step interval (s)
+  constexpr uint16_t kOpenGymPort = 5555;  // OpenGym server port
+  constexpr uint32_t kMaxQueueLen = 50;    // max queue length for observations
+  constexpr uint32_t kMaxCw = 1023;        // max contention window for actions
+}
+
+// Variables for runtime statistics
+static double totalThroughput = 0;
+static uint32_t collisionCount = 0;
+const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"};
+
+Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
   uint32_t nodeNum = NodeList::GetNNodes();
-  float low = 0.0;
-  float high = 100.0;
-  std::vector<uint8_t> shape = {
-      nodeNum,
-  };
-  std::string dtype = TypeNameGet<float>();
-  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace>(low, high, shape, dtype);
+  std::vector<uint32_t> shape = {nodeNum};
+  Ptr<OpenGymMultiDiscreteSpace> space =
+      CreateObject<OpenGymMultiDiscreteSpace>(shape, kMaxQueueLen);
   NS_LOG_UNCOND("MyGetObservationSpace: " << space);
   return space;
 }
@@ -34,13 +41,9 @@ MyGetObservationSpace(void)
 Ptr<OpenGymSpace> MyGetActionSpace(void)
 {
   uint32_t nodeNum = NodeList::GetNNodes();
-  float low = 0.0;
-  float high = 100.0;
-  std::vector<uint32_t> shape = {
-      nodeNum,
-  };
-  std::string dtype = TypeNameGet<uint32_t>();
-  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace>(low, high, shape, dtype);
+  std::vector<uint32_t> shape = {nodeNum};
+  Ptr<OpenGymMultiDiscreteSpace> space =
+      CreateObject<OpenGymMultiDiscreteSpace>(shape, kMaxCw);
   NS_LOG_UNCOND("MyGetActionSpace: " << space);
   return space;
 }
@@ -48,14 +51,13 @@ Ptr<OpenGymSpace> MyGetActionSpace(void)
 Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
   uint32_t nodeNum = NodeList::GetNNodes();
-  std::vector<uint32_t> shape = {
-      nodeNum,
-  };
-  Ptr<OpenGymBoxContainer<uint32_t>> box = CreateObject<OpenGymBoxContainer<uint32_t>>(shape);
+  std::vector<uint32_t> shape = {nodeNum};
+  Ptr<OpenGymMultiDiscreteContainer> box =
+      CreateObject<OpenGymMultiDiscreteContainer>(shape);
 
-  for (NodeList::Iterator i = NodeList::Begin(); i != NodeList::End(); ++i)
+  for (auto it = NodeList::Begin(); it != NodeList::End(); ++it)
   {
-    Ptr<Node> node = *i;
+    Ptr<Node> node = *it;
     Ptr<WifiMacQueue> queue = GetQueue(node);
     uint32_t value = queue->GetNPackets();
     box->AddValue(value);
@@ -72,25 +74,28 @@ double MyGetReward(void)
 
 void PhyTxDrop(Ptr<const Packet> packet, double snr)
 {
-  collisionCount++; // Increase collision count on dropped packets
+  collisionCount++;
 }
 
 void CalculateThroughput()
 {
-  std::cout << Simulator::Now().GetSeconds() << "s - Throughput: " << totalThroughput << " Mbps, Collisions: " << collisionCount << std::endl;
-  totalThroughput = 0; // Reset for next interval
+  std::cout << Simulator::Now().GetSeconds()
+            << "s - Throughput: " << totalThroughput
+            << " Mbps, Collisions: " << collisionCount
+            << std::endl;
+  totalThroughput = 0;
   Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
 }
 
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
 {
   NS_LOG_UNCOND("MyExecuteActions: " << action);
-
-  Ptr<OpenGymBoxContainer<uint32_t>> box = DynamicCast<OpenGymBoxContainer<uint32_t>>(action);
+  Ptr<OpenGymMultiDiscreteContainer> box =
+      DynamicCast<OpenGymMultiDiscreteContainer>(action);
   std::vector<uint32_t> actionVector = box->GetData();
 
   uint32_t nodeNum = NodeList::GetNNodes();
-  for (uint32_t i = 0; i < nodeNum; i++)
+  for (uint32_t i = 0; i < nodeNum; ++i)
   {
     Ptr<Node> node = NodeList::GetNode(i);
     uint32_t cwSize = actionVector.at(i);
@@ -100,10 +105,15 @@ bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
   return true;
 }
 
-void ThroughputMonitor(std::string context, Ptr<const Packet> packet, double snr, WifiMode mode, WifiPreamble preamble)
+void ThroughputMonitor(std::string context,
+                       Ptr<const Packet> packet,
+                       double snr,
+                       WifiMode mode,
+                       WifiPreamble preamble)
 {
-  totalThroughput += (packet->GetSize() * 8.0) / (1e6); // Convert bytes to Mbps
+  totalThroughput += (packet->GetSize() * 8.0) / 1e6; // bytes to Mbps
 }
+
 bool MyGetGameOver(void)
 {
   bool isGameOver = false;
@@ -111,15 +121,20 @@ bool MyGetGameOver(void)
   return isGameOver;
 }
 
-void ScheduleNextStateRead(double envStepTime, Ptr<OpenGymInterface> openGymInterface)
+void ScheduleNextStateRead(double envStepTime,
+                           Ptr<OpenGymInterface> openGymInterface)
 {
-  Simulator::Schedule(Seconds(envStepTime), &ScheduleNextStateRead, envStepTime, openGymInterface);
+  Simulator::Schedule(Seconds(envStepTime), &ScheduleNextStateRead,
+                      envStepTime, openGymInterface);
   openGymInterface->NotifyCurrentState();
 }
+
 int main(int argc, char *argv[])
 {
-  uint32_t nSta = 5;
-  double simulationTime = 10.0; // in seconds
+  uint32_t nSta = kNumSta;
+  double simulationTime = kSimulationTime;
+  double envStepTime = kEnvStepTime;
+  uint16_t openGymPort = kOpenGymPort;
 
   NodeContainer wifiStaNodes, wifiApNode;
   wifiStaNodes.Create(nSta);
@@ -133,9 +148,10 @@ int main(int argc, char *argv[])
   wifi.SetStandard(WIFI_STANDARD_80211n);
 
   WifiMacHelper mac;
-  Ssid ssid = Ssid("ns3-wifi");
+  Ssid ssid("ns3-wifi");
 
-  mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false));
+  mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid),
+              "ActiveProbing", BooleanValue(false));
   NetDeviceContainer staDevices = wifi.Install(phy, mac, wifiStaNodes);
 
   mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
@@ -180,16 +196,30 @@ int main(int argc, char *argv[])
   clientApps.Start(Seconds(2.0));
   clientApps.Stop(Seconds(simulationTime));
 
-  Config::Connect("/NodeList/*/DeviceList/*/Phy/State/RxOk", MakeCallback(&ThroughputMonitor));
+  Config::Connect("/NodeList/*/DeviceList/*/Phy/State/RxOk",
+                  MakeCallback(&ThroughputMonitor));
+  Config::Connect("/NodeList/*/DeviceList/*/Phy/State/TxDrop",
+                  MakeCallback(&PhyTxDrop));
 
-  Simulator::Schedule(Seconds(0.0), &ScheduleNextStateRead, envStepTime, openGymInterface);
-  Ptr<OpenGymInterface> openGymInterface = CreateObject<OpenGymInterface>(openGymPort);
-  openGymInterface->SetGetActionSpaceCb(MakeCallback(&MyGetActionSpace));
-  openGymInterface->SetGetObservationSpaceCb(MakeCallback(&MyGetObservationSpace));
-  openGymInterface->SetGetGameOverCb(MakeCallback(&MyGetGameOver));
-  openGymInterface->SetGetObservationCb(MakeCallback(&MyGetObservation));
-  openGymInterface->SetGetRewardCb(MakeCallback(&MyGetReward));
-  openGymInterface->SetExecuteActionsCb(MakeCallback(&MyExecuteActions));
+  Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
+
+  Ptr<OpenGymInterface> openGymInterface =
+      CreateObject<OpenGymInterface>(openGymPort);
+  openGymInterface->SetGetActionSpaceCb(
+      MakeCallback(&MyGetActionSpace));
+  openGymInterface->SetGetObservationSpaceCb(
+      MakeCallback(&MyGetObservationSpace));
+  openGymInterface->SetGetGameOverCb(
+      MakeCallback(&MyGetGameOver));
+  openGymInterface->SetGetObservationCb(
+      MakeCallback(&MyGetObservation));
+  openGymInterface->SetGetRewardCb(
+      MakeCallback(&MyGetReward));
+  openGymInterface->SetExecuteActionsCb(
+      MakeCallback(&MyExecuteActions));
+
+  Simulator::Schedule(Seconds(0.0), &ScheduleNextStateRead,
+                      envStepTime, openGymInterface);
   Simulator::Stop(Seconds(simulationTime));
   Simulator::Run();
   Simulator::Destroy();
