@@ -53,10 +53,9 @@ Ptr<WifiMacQueue> GetQueue(Ptr<Node> node)
 
 Ptr<OpenGymSpace> MyGetActionSpace(void)
 {
-  uint32_t nodeNum = NodeList::GetNNodes();
-  std::vector<uint32_t> shape = {nodeNum};
-  Ptr<OpenGymMultiDiscreteSpace> space =
-      CreateObject<OpenGymMultiDiscreteSpace>(shape, kMaxCw);
+  // using a single Discrete space: values 0..kMaxCw
+  Ptr<OpenGymDiscreteSpace> space =
+      CreateObject<OpenGymDiscreteSpace>(kMaxCw + 1);
   NS_LOG_UNCOND("MyGetActionSpace: " << space);
   return space;
 }
@@ -133,15 +132,14 @@ bool SetCw(Ptr<Node> node, uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
 {
   NS_LOG_UNCOND("MyExecuteActions: " << action);
-  Ptr<OpenGymMultiDiscreteContainer> box =
-      DynamicCast<OpenGymMultiDiscreteContainer>(action);
-  std::vector<uint32_t> actionVector = box->GetData();
+  Ptr<OpenGymDiscreteContainer> box =
+      DynamicCast<OpenGymDiscreteContainer>(action);
+  uint32_t cwSize = box->GetValue();
 
   uint32_t nodeNum = NodeList::GetNNodes();
   for (uint32_t i = 0; i < nodeNum; ++i)
   {
     Ptr<Node> node = NodeList::GetNode(i);
-    uint32_t cwSize = actionVector.at(i);
     SetCw(node, cwSize, cwSize);
   }
 
