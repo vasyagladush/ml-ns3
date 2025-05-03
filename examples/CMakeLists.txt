@@ -21,18 +21,6 @@ build_lib_example(
 )
 
 build_lib_example(
-  NAME our_rl
-  SOURCE_FILES our_rl/sim.cc
-  LIBRARIES_TO_LINK
-    ${libapplications}
-    ${libcore}
-    ${libinternet}
-    ${libopengym}
-    ${libwifi}
-)
-
-
-build_lib_example(
   NAME linear-mesh-2
   SOURCE_FILES linear-mesh-2/sim.cc
                linear-mesh-2/mygym.cc
@@ -77,4 +65,26 @@ build_lib_example(
     ${libopengym}
     ${libpoint-to-point-layout}
     ${libptp}
+)
+
+build_lib_example(
+  NAME our_rl-ql
+  SOURCE_FILES our_rl/ql/sim.cc
+  LIBRARIES_TO_LINK
+    ${libapplications}
+    ${libcore}
+    ${libinternet}
+    ${libopengym}
+    ${libwifi}
+)
+
+build_lib_example(
+  NAME our_rl-dqn
+  SOURCE_FILES our_rl/dqn/sim.cc
+  LIBRARIES_TO_LINK
+    ${libapplications}
+    ${libcore}
+    ${libinternet}
+    ${libopengym}
+    ${libwifi}
 )

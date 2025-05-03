@@ -38,6 +38,19 @@ Ptr<OpenGymSpace> MyGetObservationSpace(void)
   return space;
 }
 
+Ptr<WifiMacQueue> GetQueue(Ptr<Node> node)
+{
+  Ptr<NetDevice> dev = node->GetDevice(0);
+  Ptr<WifiNetDevice> wifi_dev = DynamicCast<WifiNetDevice>(dev);
+  Ptr<WifiMac> wifi_mac = wifi_dev->GetMac();
+  PointerValue ptr;
+
+  wifi_mac->GetAttribute("BE_Txop", ptr);
+  Ptr<Txop> txop = ptr.Get<Txop>();
+  Ptr<WifiMacQueue> queue = txop->GetWifiMacQueue();
+  return queue;
+}
+
 Ptr<OpenGymSpace> MyGetActionSpace(void)
 {
   uint32_t nodeNum = NodeList::GetNNodes();
@@ -67,9 +80,9 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
   return box;
 }
 
-double MyGetReward(void)
+float MyGetReward(void)
 {
-  return totalThroughput;
+  return (float)totalThroughput;
 }
 
 void PhyTxDrop(Ptr<const Packet> packet, double snr)
@@ -85,6 +98,36 @@ void CalculateThroughput()
             << std::endl;
   totalThroughput = 0;
   Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
+}
+
+bool SetCw(Ptr<Node> node, uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
+{
+  Ptr<NetDevice> dev = node->GetDevice(0);
+  Ptr<WifiNetDevice> wifi_dev = DynamicCast<WifiNetDevice>(dev);
+  Ptr<WifiMac> wifi_mac = wifi_dev->GetMac();
+  NS_ASSERT(wifi_mac != nullptr);
+  PointerValue ptr;
+  if (!wifi_mac->GetAttributeFailSafe("BE_Txop", ptr))
+  {
+    NS_LOG_UNCOND("Failed to get Txop");
+    return false;
+  }
+  Ptr<Txop> txop = ptr.Get<Txop>();
+  NS_ASSERT(txop != nullptr);
+
+  // if both set to the same value then we have uniform backoff?
+  if (cwMinValue != 0)
+  {
+    NS_LOG_DEBUG("Set CW min: " << cwMinValue);
+    txop->SetMinCw(cwMinValue);
+  }
+
+  if (cwMaxValue != 0)
+  {
+    NS_LOG_DEBUG("Set CW max: " << cwMaxValue);
+    txop->SetMaxCw(cwMaxValue);
+  }
+  return true;
 }
 
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
@@ -151,10 +194,10 @@ int main(int argc, char *argv[])
   Ssid ssid("ns3-wifi");
 
   mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid),
-              "ActiveProbing", BooleanValue(false));
+              "ActiveProbing", BooleanValue(false), "QosSupported", BooleanValue(true));
   NetDeviceContainer staDevices = wifi.Install(phy, mac, wifiStaNodes);
 
-  mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+  mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid), "QosSupported", BooleanValue(true));
   NetDeviceContainer apDevice = wifi.Install(phy, mac, wifiApNode);
 
   MobilityHelper mobility;

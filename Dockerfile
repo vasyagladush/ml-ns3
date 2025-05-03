@@ -34,6 +34,9 @@ RUN mkdir -p contrib && cd contrib && \
     cd opengym && \
     git checkout app-ns-3.36+
 
+COPY ./examples/CMakeLists.txt /ns-allinone-3.40/ns-3.40/contrib/opengym/examples/CMakeLists.txt
+COPY ./examples/our_rl/ /ns-allinone-3.40/ns-3.40/contrib/opengym/examples/our_rl/
+
 # Configure and build ns-3 project
 RUN ./ns3 configure --enable-examples && \
     ./ns3 build
@@ -44,10 +47,10 @@ RUN python3 -m venv ns3gym-venv && \
     ./ns3gym-venv/bin/pip3 install --no-cache-dir ./model/ns3gym
 
 # Set working directory for example execution
-WORKDIR /ns-allinone-3.40/ns-3.40/contrib/opengym/examples/opengym
+WORKDIR /ns-allinone-3.40/ns-3.40/contrib/opengym/examples/
 
 # Command to run the example (simple_test.py) when the container starts
-CMD ["./simple_test.py"]
+CMD ["./opengym/simple_test.py"]
 
 # If you want to run interactively or another example, you can override the CMD when running the container.
 # For example: docker run -it --rm your-ns3-gym-image bash
