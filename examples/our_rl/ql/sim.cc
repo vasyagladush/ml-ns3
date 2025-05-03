@@ -47,8 +47,7 @@ Ptr<WifiMacQueue> GetQueue(Ptr<Node> node)
 
   wifi_mac->GetAttribute("BE_Txop", ptr);
   Ptr<Txop> txop = ptr.Get<Txop>();
-  Ptr<WifiMacQueue> queue = txop->GetWifiMacQueue();
-  return queue;
+  return txop->GetWifiMacQueue();
 }
 
 Ptr<OpenGymSpace> MyGetActionSpace(void)
@@ -74,11 +73,14 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
 
 float MyGetReward(void)
 {
-  return (float)totalThroughput;
+  return static_cast<float>(totalThroughput);
 }
 
-void PhyTxDrop(Ptr<const Packet> packet, double snr)
+static void PhyTxDrop(std::string context,
+                      Ptr<const Packet> packet)
 {
+  // context will be the trace‐source path, e.g.
+  // "/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop"
   collisionCount++;
 }
 
@@ -112,7 +114,6 @@ bool SetCw(Ptr<Node> node, uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
     NS_LOG_DEBUG("Set CW min: " << cwMinValue);
     txop->SetMinCw(cwMinValue);
   }
-
   if (cwMaxValue != 0)
   {
     NS_LOG_DEBUG("Set CW max: " << cwMaxValue);
@@ -128,13 +129,10 @@ bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
       DynamicCast<OpenGymDiscreteContainer>(action);
   uint32_t cwSize = box->GetValue();
 
-  uint32_t nodeNum = NodeList::GetNNodes();
-  for (uint32_t i = 0; i < nodeNum; ++i)
+  for (uint32_t i = 0; i < NodeList::GetNNodes(); ++i)
   {
-    Ptr<Node> node = NodeList::GetNode(i);
-    SetCw(node, cwSize, cwSize);
+    SetCw(NodeList::GetNode(i), cwSize, cwSize);
   }
-
   return true;
 }
 
@@ -168,6 +166,23 @@ int main(int argc, char *argv[])
   double simulationTime = kSimulationTime;
   double envStepTime = kEnvStepTime;
   uint16_t openGymPort = kOpenGymPort;
+  uint32_t testArg = 0;
+  double distance = 0.0;
+  uint64_t simSeed = 0;
+  bool startSim = true;
+  bool debug = false;
+
+  CommandLine cmd;
+  cmd.AddValue("openGymPort", "OpenGym server port", openGymPort);
+  cmd.AddValue("stepTime", "Env step interval (s)", envStepTime);
+  cmd.AddValue("simTime", "Total simulation time (s)", simulationTime);
+  cmd.AddValue("testArg", "Test argument", testArg);
+  cmd.AddValue("distance", "Distance parameter", distance);
+  cmd.AddValue("simSeed", "RNG seed", simSeed);
+  cmd.AddValue("startSim", "Whether to start simulation immediately", startSim);
+  cmd.AddValue("debug", "Enable debug logging", debug);
+  cmd.Parse(argc, argv);
+  NS_LOG_UNCOND("testArg=" << testArg << " distance=" << distance);
 
   NodeContainer wifiStaNodes, wifiApNode;
   wifiStaNodes.Create(nSta);
@@ -231,8 +246,9 @@ int main(int argc, char *argv[])
 
   Config::Connect("/NodeList/*/DeviceList/*/Phy/State/RxOk",
                   MakeCallback(&ThroughputMonitor));
-  Config::Connect("/NodeList/*/DeviceList/*/Phy/State/TxDrop",
-                  MakeCallback(&PhyTxDrop));
+  Config::Connect(
+      "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop",
+      MakeCallback(&PhyTxDrop));
 
   Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
 
