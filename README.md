@@ -27,7 +27,7 @@ pip install matplotlib
 4. Run the thing, e.g.
 
 ```console
-cd examples/our_rl/ql && ./qlearn.py
+cd ./our_rl/ql && ./qlearn.py
 ```
 
 5. Stop and exit the container: Ctrl + D
