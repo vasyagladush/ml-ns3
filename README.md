@@ -15,7 +15,7 @@ docker run -it --rm -v ./examples:/ns-allinone-3.40/ns-3.40/contrib/opengym/exam
 3. Activate python venv (probably we can automate this step in the 2nd command):
 
 ```console
-source ./ns3gym-venv/bin/activate
+source ../ns3gym-venv/bin/activate
 ```
 
 And it might be needed to install some new python libraries, e.g.:
