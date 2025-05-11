@@ -73,8 +73,8 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
 
   Ptr<OpenGymDiscreteContainer> discrete = CreateObject<OpenGymDiscreteContainer>(kStateMax + 1);
   discrete->SetValue(value);
-  
-  NS_LOG_UNCOND("MyGetObservation: " << value);
+
+  NS_LOG_UNCOND("MyGetObservation: " << static_cast<unsigned>(value));
 
   collisionCount = 0;
   totalTxCount = 0;
