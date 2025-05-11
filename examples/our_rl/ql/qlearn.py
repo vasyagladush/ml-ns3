@@ -49,14 +49,14 @@ for episode in range(episodes):
         env.simSeed = 0
 
     raw = env.reset()
-    state = np.array(raw, dtype=np.uint8)[1:-1]
+    state = raw # TODO: divide by 'factor'
     t_reward = 0
     i = 0
     done = False
 
     while not done:
         i += 1
-        s1 = int(state[0])
+        s1 = state
 
         if learning:
             noise_scale = 1.0 / (episode + 1)
@@ -65,13 +65,13 @@ for episode in range(episodes):
         else:
             action0 = int(np.argmax(Q[s1, :]))
 
-        action = np.array([action0, 0], dtype=np.uint8)
+        action = action0 # np.array([action0, 0], dtype=np.uint8)
 
         next_raw, reward, done, info = env.step(action)
         t_reward += reward
 
-        next_state = np.array(next_raw, dtype=np.uint8)[1:-1]
-        r1 = int(next_state[0])
+        next_state = next_raw # TODO: divide by 'factor'
+        r1 = next_state
 
         if learning:
             best_next = np.max(Q[r1, :])

@@ -23,6 +23,8 @@ namespace
   constexpr uint32_t kMaxQueueLen = 50;    // max queue length for scaling
   constexpr uint32_t kStateMax = 255;      // max raw state value
   constexpr uint32_t kActionCount = 7;     // number of discrete actions
+  constexpr uint32_t kDefaultCwMin = 7;    // default CW Min of stations
+  constexpr uint32_t kDefaultCwMax = 1023; // default CW Max of stations
 }
 
 // Variables for runtime statistics
@@ -138,17 +140,34 @@ bool SetCw(Ptr<Node> node, uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
   return true;
 }
 
+bool SetCwForAllNodes(uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
+{
+  for (uint32_t i = 0; i < NodeList::GetNNodes(); ++i)
+  {
+    SetCw(NodeList::GetNode(i), cwMinValue, kDefaultCwMax);
+  }
+  return true;
+}
+
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
 {
   NS_LOG_UNCOND("MyExecuteActions: " << action);
-  Ptr<OpenGymDiscreteContainer> box =
-      DynamicCast<OpenGymDiscreteContainer>(action);
-  uint32_t cwSize = box->GetValue();
 
-  for (uint32_t i = 0; i < NodeList::GetNNodes(); ++i)
-  {
-    SetCw(NodeList::GetNode(i), cwSize, cwSize);
-  }
+  // Ptr<OpenGymDiscreteContainer> discrete =
+  //     DynamicCast<OpenGymDiscreteContainer>(action);
+  // uint32_t cwSize = discrete->GetValue();
+
+  Ptr<OpenGymDiscreteContainer> discrete = DynamicCast<OpenGymDiscreteContainer>(action);
+  uint32_t nextCwMinSize = discrete->GetValue();
+
+  // TODO: calc 0-6 to 15-31-63
+
+  const uint32_t nextCwMin = std::pow(2, nextCwMinSize + 3) - 1;
+
+  NS_LOG_UNCOND("MyExecuteActions next CW min value: " << nextCwMin);
+
+  SetCwForAllNodes(nextCwMin, kDefaultCwMax);
+
   return true;
 }
 
@@ -268,6 +287,8 @@ int main(int argc, char *argv[])
   Config::Connect(
       "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxBegin",
       MakeCallback(&PhyTxBegin));
+
+  SetCwForAllNodes(kDefaultCwMin, kDefaultCwMax);
 
   Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
 
