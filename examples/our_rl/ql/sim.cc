@@ -71,8 +71,9 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
     value = static_cast<uint8_t>(std::ceil(ratio * 255.0));
   }
 
-  Ptr<OpenGymDiscreteContainer> discrete =
-      CreateObject<OpenGymDiscreteContainer>(value);
+  Ptr<OpenGymDiscreteContainer> discrete = CreateObject<OpenGymDiscreteContainer>(kStateMax + 1);
+  discrete->SetValue(value);
+  
   NS_LOG_UNCOND("MyGetObservation: " << value);
 
   collisionCount = 0;
