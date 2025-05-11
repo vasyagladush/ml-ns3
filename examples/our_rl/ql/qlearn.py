@@ -35,22 +35,21 @@ episodes = 25
 disable_learning_after_episode = 15
 
 action_count = 7               # [0,6]
-state_queue_size = 256         # uint8
-factor = 100.0 / (state_queue_size - 1)
-shape = (state_queue_size, action_count)
+state_collision_probability = 256         # uint8
+shape = (state_collision_probability, action_count)
 
-Q = np.random.uniform(0.0, 1.0, size=shape).astype(np.float16)
+Q = np.random.uniform(0.0, 1.0, size=shape).astype(np.float32)
 
 rewards = []
 iterations = []
 
 for episode in range(episodes):
-    learning = (episode <= disable_learning_after_episode)
+    learning = (episode < disable_learning_after_episode)
     if not learning:
         env.simSeed = 0
 
     raw = env.reset()
-    state = np.array(raw, dtype=np.uint8)[1:-1] / factor
+    state = np.array(raw, dtype=np.uint8)[1:-1]
     t_reward = 0
     i = 0
     done = False
@@ -71,7 +70,7 @@ for episode in range(episodes):
         next_raw, reward, done, info = env.step(action)
         t_reward += reward
 
-        next_state = np.array(next_raw, dtype=np.uint8)[1:-1] / factor
+        next_state = np.array(next_raw, dtype=np.uint8)[1:-1]
         r1 = int(next_state[0])
 
         if learning:
