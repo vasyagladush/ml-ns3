@@ -94,7 +94,7 @@ static void PhyTxDrop(std::string context,
   collisionCount++;
 }
 
-static void PhyTxBegin(std::string context, Ptr<const Packet> packet)
+static void PhyTxBegin(std::string context, Ptr<const Packet> packet, double txPowerDbm)
 {
   totalTxCount++;
 }
@@ -265,8 +265,7 @@ int main(int argc, char *argv[])
       "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop",
       MakeCallback(&PhyTxDrop));
   Config::Connect(
-      "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/"
-      "$ns3::YansWifiPhy/PhyTxBegin",
+      "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxBegin",
       MakeCallback(&PhyTxBegin));
 
   Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
