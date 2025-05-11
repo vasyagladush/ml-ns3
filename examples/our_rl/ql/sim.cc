@@ -31,6 +31,7 @@ namespace
 static double totalThroughput = 0;
 static uint32_t collisionCount = 0;
 static uint32_t totalTxCount = 0;
+static double simTime = 0;
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
@@ -182,9 +183,8 @@ void ThroughputMonitor(std::string context,
 
 bool MyGetGameOver(void)
 {
-  bool isGameOver = false;
-  NS_LOG_UNCOND("MyGetGameOver: " << isGameOver);
-  return isGameOver;
+  NS_LOG_DEBUG("Sim Time: " << Simulator::Now().GetSeconds());
+  return (Simulator::Now().GetSeconds() >= simTime);
 }
 
 void ScheduleNextStateRead(double envStepTime,
@@ -201,8 +201,6 @@ int main(int argc, char *argv[])
   double simulationTime = kSimulationTime;
   double envStepTime = kEnvStepTime;
   uint16_t openGymPort = kOpenGymPort;
-  uint32_t testArg = 0;
-  double distance = 0.0;
   uint64_t simSeed = 0;
   bool startSim = true;
   bool debug = false;
@@ -211,13 +209,12 @@ int main(int argc, char *argv[])
   cmd.AddValue("openGymPort", "OpenGym server port", openGymPort);
   cmd.AddValue("stepTime", "Env step interval (s)", envStepTime);
   cmd.AddValue("simTime", "Total simulation time (s)", simulationTime);
-  cmd.AddValue("testArg", "Test argument", testArg);
-  cmd.AddValue("distance", "Distance parameter", distance);
   cmd.AddValue("simSeed", "RNG seed", simSeed);
   cmd.AddValue("startSim", "Whether to start simulation immediately", startSim);
   cmd.AddValue("debug", "Enable debug logging", debug);
   cmd.Parse(argc, argv);
-  NS_LOG_UNCOND("testArg=" << testArg << " distance=" << distance);
+
+  simTime = simulationTime;
 
   NodeContainer wifiStaNodes, wifiApNode;
   wifiStaNodes.Create(nSta);
@@ -309,7 +306,7 @@ int main(int argc, char *argv[])
 
   Simulator::Schedule(Seconds(0.0), &ScheduleNextStateRead,
                       envStepTime, openGymInterface);
-  Simulator::Stop(Seconds(simulationTime));
+  Simulator::Stop(Seconds(simulationTime + envStepTime));
   Simulator::Run();
   Simulator::Destroy();
 

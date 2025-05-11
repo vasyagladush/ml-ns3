@@ -7,17 +7,13 @@ from ns3gym import ns3env
 
 # simulation setup
 port = 5556
-simTime = 10        # seconds
-stepTime = 0.005    # seconds
+simTime = 2  # seconds
+stepTime = 0.005  # seconds
 seed = 0
 startSim = True
 debug = False
 
-simArgs = {
-    "--simTime": simTime,
-    "--testArg": 123,
-    "--distance": 20
-}
+simArgs = {"--simTime": simTime}
 
 env = ns3env.Ns3Env(
     port=port,
@@ -25,7 +21,7 @@ env = ns3env.Ns3Env(
     startSim=startSim,
     simSeed=seed,
     simArgs=simArgs,
-    debug=debug
+    debug=debug,
 )
 
 # Q-learning parameters
@@ -34,8 +30,8 @@ discount = 0.6
 episodes = 25
 disable_learning_after_episode = 15
 
-action_count = 7               # [0,6]
-state_collision_probability = 256         # uint8
+action_count = 7  # [0,6]
+state_collision_probability = 256  # uint8
 shape = (state_collision_probability, action_count)
 
 Q = np.random.uniform(0.0, 1.0, size=shape).astype(np.float32)
@@ -44,12 +40,19 @@ rewards = []
 iterations = []
 
 for episode in range(episodes):
-    learning = (episode < disable_learning_after_episode)
+    learning = episode < disable_learning_after_episode
     if not learning:
         env.simSeed = 0
 
-    raw = env.reset()
-    state = raw # TODO: divide by 'factor'
+    try:
+        raw = env.reset()
+    except RuntimeError as e:
+        print(
+            f"Episode {episode}: could not reset environment (simulator stopped): {e}"
+        )
+        break
+
+    state = raw  # TODO: divide by 'factor'
     t_reward = 0
     i = 0
     done = False
@@ -58,19 +61,24 @@ for episode in range(episodes):
         i += 1
         s1 = state
 
+        # choose action
         if learning:
             noise_scale = 1.0 / (episode + 1)
             tmpQ = Q[s1, :] + np.random.randn(action_count) * noise_scale
             action0 = int(np.argmax(tmpQ))
         else:
             action0 = int(np.argmax(Q[s1, :]))
+        action = action0  # np.array([action0, 0], dtype=np.uint8)
 
-        action = action0 # np.array([action0, 0], dtype=np.uint8)
+        try:
+            next_raw, reward, done, info = env.step(action)
+        except RuntimeError as e:
+            print(f"Episode {episode}, iter {i}: simulator stopped: {e}")
+            done = True
+            break
 
-        next_raw, reward, done, info = env.step(action)
         t_reward += reward
-
-        next_state = next_raw # TODO: divide by 'factor'
+        next_state = next_raw  # TODO: divide by 'factor'
         r1 = next_state
 
         if learning:
