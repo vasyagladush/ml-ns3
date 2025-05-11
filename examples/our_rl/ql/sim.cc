@@ -7,6 +7,7 @@
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/applications-module.h"
 #include "ns3/flow-monitor-module.h"
+#include <cmath> // for std::ceil
 
 using namespace ns3;
 
@@ -20,14 +21,14 @@ namespace
   constexpr double kEnvStepTime = 0.005;   // gym step interval (s)
   constexpr uint16_t kOpenGymPort = 5556;  // OpenGym server port
   constexpr uint32_t kMaxQueueLen = 50;    // max queue length for scaling
-  constexpr uint32_t kStateMax = 100;      // max raw state value
+  constexpr uint32_t kStateMax = 255;      // max raw state value
   constexpr uint32_t kActionCount = 7;     // number of discrete actions
 }
 
 // Variables for runtime statistics
 static double totalThroughput = 0;
 static uint32_t collisionCount = 0;
-const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"};
+static uint32_t totalTxCount = 0;
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
@@ -61,14 +62,23 @@ Ptr<OpenGymSpace> MyGetActionSpace(void)
 
 Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
-  // read first STA queue length, scale into [0..kStateMax]
-  Ptr<Node> node = NodeList::GetNode(0);
-  uint32_t qlen = GetQueue(node)->GetNPackets();
-  uint32_t raw = std::min(kStateMax, (qlen * kStateMax) / kMaxQueueLen);
-  Ptr<OpenGymDiscreteContainer> box =
-      CreateObject<OpenGymDiscreteContainer>(raw);
-  NS_LOG_UNCOND("MyGetObservation: " << raw);
-  return box;
+  uint8_t value = 0;
+  // Calculating collision probability. TODO: add explanation on the calc process
+  if (totalTxCount > 0)
+  {
+    double ratio = double(collisionCount) / double(totalTxCount);
+    // ceil(ratio * 255) produces a double in [0.0 … 255.0]
+    value = static_cast<uint8_t>(std::ceil(ratio * 255.0));
+  }
+
+  Ptr<OpenGymDiscreteContainer> discrete =
+      CreateObject<OpenGymDiscreteContainer>(value);
+  NS_LOG_UNCOND("MyGetObservation: " << value);
+
+  collisionCount = 0;
+  totalTxCount = 0;
+
+  return discrete;
 }
 
 float MyGetReward(void)
@@ -82,6 +92,11 @@ static void PhyTxDrop(std::string context,
   // context will be the trace‐source path, e.g.
   // "/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop"
   collisionCount++;
+}
+
+static void PhyTxBegin(std::string context, Ptr<const Packet> packet)
+{
+  totalTxCount++;
 }
 
 void CalculateThroughput()
@@ -249,6 +264,10 @@ int main(int argc, char *argv[])
   Config::Connect(
       "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop",
       MakeCallback(&PhyTxDrop));
+  Config::Connect(
+      "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/"
+      "$ns3::YansWifiPhy/PhyTxBegin",
+      MakeCallback(&PhyTxBegin));
 
   Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
 
