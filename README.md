@@ -1,3 +1,12 @@
+## Location of files
+
+Code created for this project can be found in the following directories:
+
+- [`examples/our_rl/dqn`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/dqn) - contains files for Deep Q-Learning (DQN)
+- [`examples/our_rl/ql`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/ql) - contains files for Q-Learning (QL)
+
+Other directories in the `examples/` directory contain examples provided by ns3-gym.
+
 ## Use intructions
 
 1. Build image with ns3-gym env:
