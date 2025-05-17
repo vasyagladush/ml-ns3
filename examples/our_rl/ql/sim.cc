@@ -20,7 +20,6 @@ namespace
   constexpr double kSimulationTime = 10.0; // total simulation time (s)
   constexpr double kEnvStepTime = 0.005;   // gym step interval (s)
   constexpr uint16_t kOpenGymPort = 5556;  // OpenGym server port
-  constexpr uint32_t kMaxQueueLen = 50;    // max queue length for scaling
   constexpr uint32_t kStateMax = 255;      // max raw state value
   constexpr uint32_t kActionCount = 7;     // number of discrete actions
   constexpr uint32_t kDefaultCwMin = 7;    // default CW Min of stations
@@ -31,7 +30,7 @@ namespace
 static double totalThroughput = 0;
 static uint32_t collisionCount = 0;
 static uint32_t totalTxCount = 0;
-static double simTime = 0;
+static double episodeSimulationTime = 0;
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
@@ -161,13 +160,12 @@ bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
   Ptr<OpenGymDiscreteContainer> discrete = DynamicCast<OpenGymDiscreteContainer>(action);
   uint32_t nextCwMinSize = discrete->GetValue();
 
-  // TODO: calc 0-6 to 15-31-63
-
-  const uint32_t nextCwMin = std::pow(2, nextCwMinSize + 3) - 1;
+  const uint32_t nextCw = std::pow(2, nextCwMinSize + 3) - 1;
 
   NS_LOG_UNCOND("MyExecuteActions next CW min value: " << nextCwMin);
 
-  SetCwForAllNodes(nextCwMin, kDefaultCwMax);
+  // uniform backoff
+  SetCwForAllNodes(nextCw, nextCw);
 
   return true;
 }
@@ -184,7 +182,7 @@ void ThroughputMonitor(std::string context,
 bool MyGetGameOver(void)
 {
   NS_LOG_DEBUG("Sim Time: " << Simulator::Now().GetSeconds());
-  return (Simulator::Now().GetSeconds() >= simTime);
+  return (Simulator::Now().GetSeconds() >= episodeSimulationTime);
 }
 
 void ScheduleNextStateRead(double envStepTime,
@@ -214,7 +212,7 @@ int main(int argc, char *argv[])
   cmd.AddValue("debug", "Enable debug logging", debug);
   cmd.Parse(argc, argv);
 
-  simTime = simulationTime;
+  episodeSimulationTime = simulationTime;
 
   NodeContainer wifiStaNodes, wifiApNode;
   wifiStaNodes.Create(nSta);
