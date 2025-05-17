@@ -30,6 +30,10 @@ static uint32_t s_totalTxCount = 0;
 static double s_episodeSimulationTime = 0;
 static double s_envStemTime = 5;
 
+// per-node counters:
+static std::vector<uint32_t> s_collisionCountVec;
+static std::vector<uint32_t> s_totalTxCountVec;
+
 const std::vector<std::string> features = {"N_STAs", "Throughput", "Collision_probability"};
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
@@ -52,8 +56,7 @@ Ptr<OpenGymSpace> MyGetActionSpace(void)
   float low = 0.0;
   float high = 100.0;
   std::vector<uint32_t> shape = {
-      nodeNum,
-  };
+      nodeNum, 2};
   std::string dtype = TypeNameGet<uint32_t>();
   Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace>(low, high, shape, dtype);
   NS_LOG_UNCOND("MyGetActionSpace: " << space);
@@ -78,15 +81,28 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
   uint32_t nodeNum = NodeList::GetNNodes();
   std::vector<uint32_t> shape = {
       nodeNum,
-  };
+      2};
   Ptr<OpenGymBoxContainer<uint32_t>> box = CreateObject<OpenGymBoxContainer<uint32_t>>(shape);
 
-  for (NodeList::Iterator i = NodeList::Begin(); i != NodeList::End(); ++i)
+  size_t idx = 0;
+  for (NodeList::Iterator i = NodeList::Begin(); i != NodeList::End(); ++i, ++idx)
   {
     Ptr<Node> node = *i;
     Ptr<WifiMacQueue> queue = GetQueue(node);
-    uint32_t value = queue->GetNPackets();
-    box->AddValue(value);
+    uint32_t nPackets = queue->GetNPackets();
+
+    box->AddValue(nPackets);
+
+    uint8_t collisionProbability = 0;
+    // Calculating collision probability. TODO: add explanation on the calc process
+    if (s_totalTxCountVec[idx] > 0)
+    {
+      double ratio = double(s_collisionCountVec[idx]) / double(s_totalTxCountVec[idx]);
+      // ceil(ratio * 255) produces a double in [0.0 … 255.0]
+      collisionProbability = static_cast<uint8_t>(std::ceil(ratio * 255.0));
+    }
+
+    box->AddValue(collisionProbability);
   }
 
   NS_LOG_DEBUG("MyGetObservation: " << box);
@@ -106,6 +122,11 @@ float MyGetReward(void)
   s_totalTxCount = 0;
   s_totalBytesReceived = 0;
 
+  std::fill(s_collisionCountVec.begin(),
+            s_collisionCountVec.end(), 0);
+  std::fill(s_totalTxCountVec.begin(),
+            s_totalTxCountVec.end(), 0);
+
   return static_cast<float>(throughput);
 }
 
@@ -115,6 +136,10 @@ static void PhyRxDrop(std::string context,
   // context will be the trace‐source path, e.g.
   // "/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyRxDrop"
 
+  auto a = context.find("/NodeList/") + 10;
+  auto b = context.find("/DeviceList", a);
+  uint32_t nodeId = std::stoul(context.substr(a, b - a));
+
   switch (reason)
   {
   case ns3::WifiPhyRxfailureReason::PREAMBLE_DETECT_FAILURE:
@@ -122,6 +147,7 @@ static void PhyRxDrop(std::string context,
   case ns3::WifiPhyRxfailureReason::FRAME_CAPTURE_PACKET_SWITCH:
   {
     ++s_collisionCount;
+    ++s_collisionCountVec[nodeId];
     break;
   }
   default:
@@ -132,6 +158,11 @@ static void PhyRxDrop(std::string context,
 static void PhyTxBegin(std::string context, Ptr<const Packet> packet, double txPowerDbm)
 {
   s_totalTxCount++;
+
+  auto a = context.find("/NodeList/") + 10;
+  auto b = context.find("/DeviceList", a);
+  uint32_t nodeId = std::stoul(context.substr(a, b - a));
+  ++s_totalTxCountVec[nodeId];
 }
 
 void CalculateThroughput()
@@ -245,6 +276,9 @@ int main(int argc, char *argv[])
   NodeContainer wifiStaNodes, wifiApNode;
   wifiStaNodes.Create(nSta);
   wifiApNode.Create(1);
+
+  s_collisionCountVec.assign(nSta, 0);
+  s_totalTxCountVec.assign(nSta, 0);
 
   YansWifiChannelHelper channel = YansWifiChannelHelper::Default();
   YansWifiPhyHelper phy;
