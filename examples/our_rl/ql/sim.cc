@@ -16,9 +16,9 @@ NS_LOG_COMPONENT_DEFINE("WifiSimulation");
 // Named constants for configuration, internal linkage
 namespace
 {
-  constexpr uint32_t kNumSta = 5;          // number of stations
+  constexpr uint32_t kNumSta = 30;        // number of stations
   constexpr double kSimulationTime = 10.0; // total simulation time (s)
-  constexpr double kEnvStepTime = 0.005;   // gym step interval (s)
+  constexpr double kEnvStepTime = 0.1;       // gym step interval (s)
   constexpr uint16_t kOpenGymPort = 5556;  // OpenGym server port
   constexpr uint32_t kStateMax = 255;      // max raw state value
   constexpr uint32_t kActionCount = 7;     // number of discrete actions
@@ -27,10 +27,11 @@ namespace
 }
 
 // Variables for runtime statistics
-static double totalThroughput = 0;
-static uint32_t collisionCount = 0;
-static uint32_t totalTxCount = 0;
-static double episodeSimulationTime = 0;
+static double s_totalBytesReceived = 0;
+static uint32_t s_collisionCount = 0;
+static uint32_t s_totalTxCount = 0;
+static double s_episodeSimulationTime = 0;
+static double s_envStemTime = 5;
 
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
@@ -66,9 +67,9 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
   uint8_t value = 0;
   // Calculating collision probability. TODO: add explanation on the calc process
-  if (totalTxCount > 0)
+  if (s_totalTxCount > 0)
   {
-    double ratio = double(collisionCount) / double(totalTxCount);
+    double ratio = double(s_collisionCount) / double(s_totalTxCount);
     // ceil(ratio * 255) produces a double in [0.0 … 255.0]
     value = static_cast<uint8_t>(std::ceil(ratio * 255.0));
   }
@@ -76,40 +77,60 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
   Ptr<OpenGymDiscreteContainer> discrete = CreateObject<OpenGymDiscreteContainer>(kStateMax + 1);
   discrete->SetValue(value);
 
-  NS_LOG_UNCOND("MyGetObservation: " << static_cast<unsigned>(value));
-
-  collisionCount = 0;
-  totalTxCount = 0;
+  NS_LOG_DEBUG("MyGetObservation: " << static_cast<unsigned>(value));
 
   return discrete;
 }
 
 float MyGetReward(void)
 {
-  return static_cast<float>(totalThroughput);
+  const double throughput = s_totalBytesReceived * 8.0 / 1e6 / s_envStemTime;
+
+  std::cout << Simulator::Now().GetSeconds()
+            << "s - Throughput: " << throughput
+            << " Mbps, Collisions: " << s_collisionCount
+            << std::endl;
+
+  s_collisionCount = 0;
+  s_totalTxCount = 0;
+  s_totalBytesReceived = 0;
+
+  return static_cast<float>(throughput);
 }
 
-static void PhyTxDrop(std::string context,
-                      Ptr<const Packet> packet)
+static void PhyRxDrop(std::string context,
+                      Ptr<const Packet> packet, const ns3::WifiPhyRxfailureReason reason)
 {
   // context will be the trace‐source path, e.g.
-  // "/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop"
-  collisionCount++;
+  // "/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyRxDrop"
+
+  switch (reason)
+  {
+  case ns3::WifiPhyRxfailureReason::PREAMBLE_DETECT_FAILURE:
+  case ns3::WifiPhyRxfailureReason::PREAMBLE_DETECTION_PACKET_SWITCH:
+  case ns3::WifiPhyRxfailureReason::FRAME_CAPTURE_PACKET_SWITCH:
+  {
+    ++s_collisionCount;
+    break;
+  }
+  default:
+    break;
+  }
 }
 
 static void PhyTxBegin(std::string context, Ptr<const Packet> packet, double txPowerDbm)
 {
-  totalTxCount++;
+  s_totalTxCount++;
 }
 
 void CalculateThroughput()
 {
-  std::cout << Simulator::Now().GetSeconds()
-            << "s - Throughput: " << totalThroughput
-            << " Mbps, Collisions: " << collisionCount
-            << std::endl;
-  totalThroughput = 0;
-  Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
+  // std::cout << Simulator::Now().GetSeconds()
+  //           << "s - Throughput: " << totalThroughput
+  //           << " Mbps, Collisions: " << s_collisionCount
+  //           << std::endl;
+  // totalThroughput = 0;
+  // Simulator::Schedule(Seconds(1.0), &CalculateThroughput);
 }
 
 bool SetCw(Ptr<Node> node, uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
@@ -151,18 +172,18 @@ bool SetCwForAllNodes(uint32_t cwMinValue = 0, uint32_t cwMaxValue = 0)
 
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
 {
-  NS_LOG_UNCOND("MyExecuteActions: " << action);
+  NS_LOG_DEBUG("MyExecuteActions: " << action);
 
   // Ptr<OpenGymDiscreteContainer> discrete =
   //     DynamicCast<OpenGymDiscreteContainer>(action);
   // uint32_t cwSize = discrete->GetValue();
 
   Ptr<OpenGymDiscreteContainer> discrete = DynamicCast<OpenGymDiscreteContainer>(action);
-  uint32_t nextCwMinSize = discrete->GetValue();
+  uint32_t nextCwSize = discrete->GetValue();
 
-  const uint32_t nextCw = std::pow(2, nextCwMinSize + 3) - 1;
+  const uint32_t nextCw = std::pow(2, nextCwSize + 3) - 1;
 
-  NS_LOG_UNCOND("MyExecuteActions next CW min value: " << nextCwMin);
+  NS_LOG_UNCOND("MyExecuteActions next CW value: " << nextCw);
 
   // uniform backoff
   SetCwForAllNodes(nextCw, nextCw);
@@ -170,19 +191,19 @@ bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
   return true;
 }
 
-void ThroughputMonitor(std::string context,
-                       Ptr<const Packet> packet,
-                       double snr,
-                       WifiMode mode,
-                       WifiPreamble preamble)
+void PhyRxOk(std::string context,
+             Ptr<const Packet> packet,
+             double snr,
+             WifiMode mode,
+             WifiPreamble preamble)
 {
-  totalThroughput += (packet->GetSize() * 8.0) / 1e6; // bytes to Mbps
+  s_totalBytesReceived += packet->GetSize();
 }
 
 bool MyGetGameOver(void)
 {
   NS_LOG_DEBUG("Sim Time: " << Simulator::Now().GetSeconds());
-  return (Simulator::Now().GetSeconds() >= episodeSimulationTime);
+  return (Simulator::Now().GetSeconds() >= s_episodeSimulationTime);
 }
 
 void ScheduleNextStateRead(double envStepTime,
@@ -212,7 +233,8 @@ int main(int argc, char *argv[])
   cmd.AddValue("debug", "Enable debug logging", debug);
   cmd.Parse(argc, argv);
 
-  episodeSimulationTime = simulationTime;
+  s_episodeSimulationTime = simulationTime;
+  s_envStemTime = envStepTime;
 
   NodeContainer wifiStaNodes, wifiApNode;
   wifiStaNodes.Create(nSta);
@@ -275,17 +297,17 @@ int main(int argc, char *argv[])
   clientApps.Stop(Seconds(simulationTime));
 
   Config::Connect("/NodeList/*/DeviceList/*/Phy/State/RxOk",
-                  MakeCallback(&ThroughputMonitor));
+                  MakeCallback(&PhyRxOk));
   Config::Connect(
-      "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxDrop",
-      MakeCallback(&PhyTxDrop));
+      "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyRxDrop",
+      MakeCallback(&PhyRxDrop));
   Config::Connect(
       "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PhyTxBegin",
       MakeCallback(&PhyTxBegin));
 
   SetCwForAllNodes(kDefaultCwMin, kDefaultCwMax);
 
-  Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
+  // Simulator::Schedule(Seconds(0.0), &CalculateThroughput);
 
   Ptr<OpenGymInterface> openGymInterface =
       CreateObject<OpenGymInterface>(openGymPort);

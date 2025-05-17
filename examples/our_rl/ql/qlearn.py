@@ -7,8 +7,8 @@ from ns3gym import ns3env
 
 # simulation setup
 port = 5556
-simTime = 2  # seconds
-stepTime = 0.005  # seconds
+simTime = 10  # seconds
+stepTime = 0.1  # seconds
 seed = 0
 startSim = True
 debug = False
@@ -27,7 +27,7 @@ env = ns3env.Ns3Env(
 # Q-learning parameters
 alpha = 0.2
 discount = 0.6
-episodes = 25
+episodes = 50
 disable_learning_after_episode = 15
 
 action_count = 7  # [0,6]
