@@ -16,11 +16,11 @@ NS_LOG_COMPONENT_DEFINE("WifiSimulation");
 // Named constants for configuration, internal linkage
 namespace
 {
-  constexpr uint32_t kNumSta = 30;        // number of stations
+  constexpr uint32_t kNumSta = 30;         // number of stations
   constexpr double kSimulationTime = 10.0; // total simulation time (s)
-  constexpr double kEnvStepTime = 0.1;       // gym step interval (s)
+  constexpr double kEnvStepTime = 0.1;     // gym step interval (s)
   constexpr uint16_t kOpenGymPort = 5556;  // OpenGym server port
-  constexpr uint32_t kStateMax = 255;      // max raw state value
+  constexpr uint32_t kStateMax = 0xFFFF;   // max raw state value
   constexpr uint32_t kActionCount = 7;     // number of discrete actions
   constexpr uint32_t kDefaultCwMin = 7;    // default CW Min of stations
   constexpr uint32_t kDefaultCwMax = 1023; // default CW Max of stations
@@ -65,19 +65,37 @@ Ptr<OpenGymSpace> MyGetActionSpace(void)
 
 Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
-  uint8_t value = 0;
+  uint8_t collisionProbability = 0;
   // Calculating collision probability. TODO: add explanation on the calc process
   if (s_totalTxCount > 0)
   {
     double ratio = double(s_collisionCount) / double(s_totalTxCount);
     // ceil(ratio * 255) produces a double in [0.0 … 255.0]
-    value = static_cast<uint8_t>(std::ceil(ratio * 255.0));
+    collisionProbability = static_cast<uint8_t>(std::ceil(ratio * 255.0));
   }
 
-  Ptr<OpenGymDiscreteContainer> discrete = CreateObject<OpenGymDiscreteContainer>(kStateMax + 1);
-  discrete->SetValue(value);
+  uint32_t totalNPackets = 0;
+  for (NodeList::Iterator i = NodeList::Begin(); i != NodeList::End(); ++i)
+  {
+    Ptr<Node> node = *i;
+    Ptr<WifiMacQueue> queue = GetQueue(node);
+    uint32_t nPackets = queue->GetNPackets();
 
-  NS_LOG_DEBUG("MyGetObservation: " << static_cast<unsigned>(value));
+    totalNPackets += nPackets;
+  }
+
+  uint8_t log2OfNPackets = 0;
+  if (totalNPackets > 0)
+  {
+    log2OfNPackets = floor(log2(totalNPackets));
+  }
+
+  uint16_t packedValue = packedValue = (uint16_t(collisionProbability) << 8) | uint16_t(log2OfNPackets);
+
+  Ptr<OpenGymDiscreteContainer> discrete = CreateObject<OpenGymDiscreteContainer>(kStateMax + 1);
+  discrete->SetValue(packedValue);
+
+  NS_LOG_DEBUG("MyGetObservation: collision probability = " << unsigned(collisionProbability) << "; queued packets = " << unsigned(totalNPackets));
 
   return discrete;
 }
