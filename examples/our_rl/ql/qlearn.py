@@ -9,6 +9,7 @@ from ns3gym import ns3env
 port = 5556
 simTime = 10  # seconds
 stepTime = 0.1  # seconds
+# changing stepTime appears to require change both in .py and .cc
 seed = 0
 startSim = True
 debug = False
@@ -27,12 +28,14 @@ env = ns3env.Ns3Env(
 # Q-learning parameters
 alpha = 0.2
 discount = 0.6
-episodes = 50
-disable_learning_after_episode = 15
+episodes = 20
+disable_learning_after_episode = 18
 
 action_count = 7  # [0,6]
 state_collision_probability = 256  # uint8
-shape = (state_collision_probability, action_count)
+state_packet_count = 256 # uint8
+# No real reason to split the uint16 combined state here
+shape = (state_collision_probability * state_packet_count, action_count)
 
 Q = np.random.uniform(0.0, 1.0, size=shape).astype(np.float32)
 
@@ -103,4 +106,5 @@ plt.plot(averages)
 plt.xlabel("Episode")
 plt.ylabel("Avg. reward")
 plt.title("Average Reward (Episode)")
-plt.show()
+plt.savefig("avg.png")
+plt.close()
