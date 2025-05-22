@@ -84,13 +84,17 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
     totalNPackets += nPackets;
   }
 
-  uint8_t log2OfNPackets = 0;
+  uint8_t quantisedPackets = 0;
   if (totalNPackets > 0)
   {
-    log2OfNPackets = floor(log2(totalNPackets));
+    // quantisedPackets = floor(log2(totalNPackets));
+    quantisedPackets = ceil(totalNPackets / 64); // can handle [0, 16320] queued packets without any issues
+    if (quantisedPackets > 255) {
+      quantisedPackets = 255;
+    }
   }
 
-  uint16_t packedValue = packedValue = (uint16_t(collisionProbability) << 8) | uint16_t(log2OfNPackets);
+  uint16_t packedValue = packedValue = (uint16_t(collisionProbability) << 8) | uint16_t(quantisedPackets);
 
   Ptr<OpenGymDiscreteContainer> discrete = CreateObject<OpenGymDiscreteContainer>(kStateMax + 1);
   discrete->SetValue(packedValue);
