@@ -4,15 +4,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from ns3gym import ns3env
+from math import ceil
 
 # simulation setup
 port = 5556
-simTime = 10  # seconds
+simTime = 10  # seconds, first 2 seconds will be discarded
 stepTime = 0.1  # seconds
 # changing stepTime appears to require change both in .py and .cc
 seed = 0
 startSim = True
 debug = False
+
+if 2 >= simTime:
+    raise ValueError("All simulation time will be spent on warm-up")
+warmup_iterations = ceil(2 / stepTime)
 
 simArgs = {"--simTime": simTime}
 
@@ -26,10 +31,10 @@ env = ns3env.Ns3Env(
 )
 
 # Q-learning parameters
-alpha = 0.2
-discount = 0.6
-episodes = 20
-disable_learning_after_episode = 18
+alpha = 0.3
+discount = 0.3
+episodes = 25
+disable_learning_after_episode = 20
 
 action_count = 7  # [0,6]
 state_collision_probability = 256  # uint8
@@ -59,6 +64,11 @@ for episode in range(episodes):
     t_reward = 0
     i = 0
     done = False
+
+    for it in range(warmup_iterations):
+        # ns3 seems to never really work before 2s mark of each episode
+        # this will skip that time from Q-Learning's perspective
+        env.step(0)
 
     while not done:
         i += 1
