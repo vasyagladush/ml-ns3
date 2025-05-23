@@ -5,11 +5,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ns3gym import ns3env
 from math import ceil
+import random
 
 # simulation setup
 port = 5556
-simTime = 10  # seconds, first 2 seconds will be discarded
-stepTime = 0.1  # seconds
+simTime = 4  # seconds, first 2 seconds will be discarded
+stepTime = 0.01  # seconds
 # changing stepTime appears to require change both in .py and .cc
 seed = 0
 startSim = True
@@ -18,6 +19,7 @@ debug = False
 if 2 >= simTime:
     raise ValueError("All simulation time will be spent on warm-up")
 warmup_iterations = ceil(2 / stepTime)
+real_sim_time = (simTime - 2) / stepTime
 
 simArgs = {"--simTime": simTime}
 
@@ -31,10 +33,13 @@ env = ns3env.Ns3Env(
 )
 
 # Q-learning parameters
-alpha = 0.3
-discount = 0.3
-episodes = 25
+alpha = 0.01
+discount = 0.01
+episodes = 21
 disable_learning_after_episode = 20
+
+if disable_learning_after_episode > episodes + 1:
+    raise ValueError("Must have at least as many episodes as learning episodes + 1.")
 
 action_count = 7  # [0,6]
 state_collision_probability = 256  # uint8
@@ -70,18 +75,29 @@ for episode in range(episodes):
         # this will skip that time from Q-Learning's perspective
         env.step(0)
 
+    cws = []
+    col_probs = []
+    ths = []
     while not done:
         i += 1
         s1 = state
 
+        col_prob = s1 & 255
+        throughput = ((s1 >> 8) * 64) / stepTime
+
+        col_probs.append(col_prob)
+        ths.append(throughput)
+
         # choose action
         if learning:
-            noise_scale = 1.0 / (episode + 1)
+            noise_scale = 10.0 / (episode + 1)
             tmpQ = Q[s1, :] + np.random.randn(action_count) * noise_scale
             action0 = int(np.argmax(tmpQ))
         else:
             action0 = int(np.argmax(Q[s1, :]))
         action = action0  # np.array([action0, 0], dtype=np.uint8)
+        #cws.append(2**(action + 3))
+        cws.append(action)
 
         try:
             next_raw, reward, done, info = env.step(action)
@@ -91,15 +107,35 @@ for episode in range(episodes):
             break
 
         t_reward += reward
-        next_state = next_raw  # TODO: divide by 'factor'
-        r1 = next_state
+        r1 = next_raw  # TODO: divide by 'factor'
 
         if learning:
             best_next = np.max(Q[r1, :])
             Q[s1, action0] += alpha * (reward + discount * best_next - Q[s1, action0])
 
-        state = next_state
+        state = r1
+    plt.plot(cws)
+    plt.xlabel("iteration")
+    plt.ylabel("CW")
+    plt.title(f"CW (iteration), episode {episode}")
+    plt.savefig(f"cw_ep{episode}")
+    plt.close()
 
+    plt.plot(col_probs)
+    plt.xlabel("iteration")
+    plt.ylabel("Collision Probability (x/255)")
+    plt.title(f"Pr(Collision) (iteration), episode {episode}")
+    plt.savefig(f"c_prob_ep{episode}")
+    plt.close()
+
+    plt.plot(ths)
+    plt.xlabel("iteration")
+    plt.ylabel("\"Throughput\"")
+    plt.title(f"\"Throughput\" (iteration), episode {episode}")
+    plt.savefig(f"ths_ep{episode}")
+    plt.close()
+
+    t_reward = t_reward / real_sim_time
     print(f"Episode {episode}, total reward: {t_reward}")
     rewards.append(t_reward)
     iterations.append(i)
@@ -111,7 +147,7 @@ chunks = np.array_split(rewards, episodes)
 mean = np.mean(rewards[disable_learning_after_episode:])
 averages = [sum(chunk) / len(chunk) for chunk in chunks]
 
-print(f"Mean after learning: {mean}")
+# print(f"Mean after learning: {mean}")
 plt.plot(averages)
 plt.xlabel("Episode")
 plt.ylabel("Avg. reward")

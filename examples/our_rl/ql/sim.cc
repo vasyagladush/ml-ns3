@@ -18,7 +18,7 @@ namespace
 {
   constexpr uint32_t kNumSta = 30;         // number of stations
   constexpr double kSimulationTime = 10.0; // total simulation time (s)
-  constexpr double kEnvStepTime = 0.1;     // gym step interval (s)
+  constexpr double kEnvStepTime = 0.01;     // gym step interval (s)
   constexpr uint16_t kOpenGymPort = 5556;  // OpenGym server port
   constexpr uint32_t kStateMax = 0xFFFF;   // max raw state value
   constexpr uint32_t kActionCount = 7;     // number of discrete actions
