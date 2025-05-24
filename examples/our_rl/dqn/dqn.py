@@ -7,7 +7,7 @@ from collections import deque
 import tensorflow as tf
 from tensorflow.keras import layers
 from ns3gym import ns3env
-
+import matplotlib.pyplot as plt
 # --- DQN Agent Class ---
 class DQNAgent:
     def __init__(self, state_size, action_size, cw_min=1, cw_max=100):
@@ -75,22 +75,30 @@ nodeNum = 5
 env = ns3env.Ns3Env(port=port, stepTime=stepTime, startSim=True, simSeed=seed,
                     simArgs={"--simTime": simTime, "--nodeNum": nodeNum}, debug=False)
 
-state_size = env.observation_space.shape[0]
+state_size = 2  # collision_prob i log2_queued_packets
 action_size = env.action_space.shape[0]
 
 agent = DQNAgent(state_size, action_size)
 episodes = 50
 max_steps = 100
+episode_rewards = []
+
 
 for e in range(episodes):
-    state = env.reset()
-    state = np.reshape(state, [state_size])
+    raw_state = env.reset()
+    collision_prob = raw_state[0] / 256.0         # Zakres [0, 1]
+    log2_queued = raw_state[5]           # Zakres [0, 1] dla spójności
+    state = np.array([collision_prob, log2_queued])
+
     total_reward = 0
 
     for t in range(max_steps):
         action = agent.act(state)
-        next_state, reward, done, _ = env.step(action.tolist())
-        next_state = np.reshape(next_state, [state_size])
+        next_raw_state, reward, done, _ = env.step(action.tolist())
+
+        collision_prob = next_raw_state[0] / 256.0  
+        log2_queued = next_raw_state[5] 
+        next_state = np.array([collision_prob, log2_queued])
 
         agent.remember(state, action, reward, next_state, done)
         state = next_state
@@ -100,7 +108,23 @@ for e in range(episodes):
             print(f"Episode {e+1}/{episodes} - reward: {total_reward}, epsilon: {agent.epsilon:.3f}")
             break
 
+    episode_rewards.append(total_reward)  # <- dodaj po epizodzie
+
     agent.replay()
     agent.update_target_model()
 
+# --- Save reward plot ---
+
+
+plt.figure(figsize=(10, 5))
+plt.plot(episode_rewards, label='Total Reward per Episode')
+plt.xlabel('Episode')
+plt.ylabel('Total Reward')
+plt.title('DQN Training Progress')
+plt.legend()
+plt.grid(True)
+plt.savefig("training_rewards.png")
+
 env.close()
+
+
