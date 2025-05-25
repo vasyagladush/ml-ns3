@@ -33,10 +33,10 @@ env = ns3env.Ns3Env(
 )
 
 # Q-learning parameters
-alpha = 0.01
-discount = 0.01
-episodes = 21
-disable_learning_after_episode = 20
+alpha = 0.3
+discount = 0.2
+episodes = 7
+disable_learning_after_episode = 6
 
 if disable_learning_after_episode > episodes + 1:
     raise ValueError("Must have at least as many episodes as learning episodes + 1.")
@@ -65,7 +65,7 @@ for episode in range(episodes):
         )
         break
 
-    state = raw  # TODO: divide by 'factor'
+    state = raw
     t_reward = 0
     i = 0
     done = False
@@ -83,10 +83,7 @@ for episode in range(episodes):
         s1 = state
 
         col_prob = s1 & 255
-        throughput = ((s1 >> 8) * 64) / stepTime
-
         col_probs.append(col_prob)
-        ths.append(throughput)
 
         # choose action
         if learning:
@@ -107,7 +104,8 @@ for episode in range(episodes):
             break
 
         t_reward += reward
-        r1 = next_raw  # TODO: divide by 'factor'
+        ths.append(reward)
+        r1 = next_raw
 
         if learning:
             best_next = np.max(Q[r1, :])
