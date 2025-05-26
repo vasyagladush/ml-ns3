@@ -4,12 +4,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from ns3gym import ns3env
-from math import ceil
+from math import ceil, exp, sin, pi
 import random
 
 # simulation setup
 port = 5556
-simTime = 4  # seconds, first 2 seconds will be discarded
+simTime = 12  # seconds, first 2 seconds will be discarded
 stepTime = 0.01  # seconds
 # changing stepTime appears to require change both in .py and .cc
 seed = 0
@@ -35,8 +35,9 @@ env = ns3env.Ns3Env(
 # Q-learning parameters
 alpha = 0.3
 discount = 0.2
-episodes = 7
-disable_learning_after_episode = 6
+episodes = 21
+disable_learning_after_episode = 20
+use_noise_x = True
 
 if disable_learning_after_episode > episodes + 1:
     raise ValueError("Must have at least as many episodes as learning episodes + 1.")
@@ -47,10 +48,18 @@ state_packet_count = 256 # uint8
 # No real reason to split the uint16 combined state here
 shape = (state_collision_probability * state_packet_count, action_count)
 
-Q = np.random.uniform(0.0, 1.0, size=shape).astype(np.float32)
+#Q = np.random.uniform(0.0, 1.0, size=shape).astype(np.float32)
+Q = np.zeros(shape, dtype=np.float32)
 
 rewards = []
 iterations = []
+
+def get_noise(episode: int):
+    episode = max(0, min(episode, disable_learning_after_episode - 1))
+    x = episode / (disable_learning_after_episode - 1)
+    noise = 0.6 * exp(-3 * x) + 0.2 * sin(3 * pi * x) + 0.3
+    noise = max(0.1, min(noise, 1.0))
+    return noise
 
 for episode in range(episodes):
     learning = episode < disable_learning_after_episode
@@ -87,9 +96,13 @@ for episode in range(episodes):
 
         # choose action
         if learning:
-            noise_scale = 10.0 / (episode + 1)
-            tmpQ = Q[s1, :] + np.random.randn(action_count) * noise_scale
-            action0 = int(np.argmax(tmpQ))
+            if use_noise_x:
+                tmpQ = Q[s1, :] + np.random.randn(action_count) * get_noise(episode)
+                action0 = int(np.argmax(tmpQ))
+            else:
+                noise_scale = 3.0 / (episode + 1)
+                tmpQ = Q[s1, :] + np.random.randn(action_count) * noise_scale
+                action0 = int(np.argmax(tmpQ))
         else:
             action0 = int(np.argmax(Q[s1, :]))
         action = action0  # np.array([action0, 0], dtype=np.uint8)
