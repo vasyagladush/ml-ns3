@@ -1,0 +1,5 @@
+Episodes: 6, Learning disabled after: 5
+Real Sim Time: 3000.0, step: 0.01
+alpha: 0.4
+discount: 0.99
+Noise X
