@@ -7,6 +7,11 @@ Code created for this project can be found in the following directories:
 
 Other directories in the `examples/` directory contain examples provided by ns3-gym.
 
+## Results
+
+Graphs showing obtained results can be found in:
+- [`examples/our_rl/dqn`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/dqn) - DQN result graphs
+- [`examples/our_rl/ql/results`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/ql/results) - Q-Learning result graphs
 ## Use intructions
 
 1. Build image with ns3-gym env:
