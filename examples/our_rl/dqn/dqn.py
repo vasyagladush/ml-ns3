@@ -82,12 +82,19 @@ agent = DQNAgent(state_size, action_size)
 episodes = 50
 max_steps = 100
 episode_rewards = []
+episode_cws = []
+episode_throughputs = []
+episode_collisions = []
 
 
 for e in range(episodes):
+    cws = []
+    throughputs = []
+    collisions = []
+
     raw_state = env.reset()
-    collision_prob = raw_state[0] / 256.0         # Zakres [0, 1]
-    log2_queued = raw_state[5]           # Zakres [0, 1] dla spójności
+    collision_prob = raw_state[1] / 256.0         
+    log2_queued = raw_state[0]           
     state = np.array([collision_prob, log2_queued])
 
     total_reward = 0
@@ -96,22 +103,29 @@ for e in range(episodes):
         action = agent.act(state)
         next_raw_state, reward, done, _ = env.step(action.tolist())
 
-        collision_prob = next_raw_state[0] / 256.0  
-        log2_queued = next_raw_state[5] 
+        collision_prob = next_raw_state[1] / 256.0  
+        log2_queued = next_raw_state[0] 
         next_state = np.array([collision_prob, log2_queued])
 
         agent.remember(state, action, reward, next_state, done)
         state = next_state
         total_reward += reward
+        cws.append(np.mean(action)) 
+        throughputs.append(reward)  
+        collisions.append(next_raw_state[1] / 256.0) 
+
 
         if done:
             print(f"Episode {e+1}/{episodes} - reward: {total_reward}, epsilon: {agent.epsilon:.3f}")
             break
 
-    episode_rewards.append(total_reward)  # <- dodaj po epizodzie
+    episode_rewards.append(total_reward) 
 
     agent.replay()
     agent.update_target_model()
+    episode_cws.append(np.mean(cws))
+    episode_throughputs.append(np.mean(throughputs))
+    episode_collisions.append(np.mean(collisions))
 
 # --- Save reward plot ---
 
@@ -124,6 +138,35 @@ plt.title('DQN Training Progress')
 plt.legend()
 plt.grid(True)
 plt.savefig("training_rewards.png")
+# CW per episode
+plt.figure(figsize=(10, 5))
+plt.plot(episode_cws, label='Average CW')
+plt.xlabel('Episode')
+plt.ylabel('CW')
+plt.title('Average Contention Window per Episode')
+plt.grid(True)
+plt.legend()
+plt.savefig("avg_cw_per_episode.png")
+
+# Throughput per episode
+plt.figure(figsize=(10, 5))
+plt.plot(episode_throughputs, label='Average Throughput', color='green')
+plt.xlabel('Episode')
+plt.ylabel('Throughput')
+plt.title('Average Throughput per Episode')
+plt.grid(True)
+plt.legend()
+plt.savefig("avg_throughput_per_episode.png")
+
+# Collision probability per episode
+plt.figure(figsize=(10, 5))
+plt.plot(episode_collisions, label='Collision Probability', color='red')
+plt.xlabel('Episode')
+plt.ylabel('Collision Probability')
+plt.title('Collision Probability per Episode')
+plt.grid(True)
+plt.legend()
+plt.savefig("collision_prob_per_episode.png")
 
 env.close()
 
