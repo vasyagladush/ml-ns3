@@ -8,6 +8,8 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from ns3gym import ns3env
 import matplotlib.pyplot as plt
+from math import ceil
+
 # --- DQN Agent Class ---
 class DQNAgent:
     def __init__(self, state_size, action_size, cw_min=1, cw_max=100):
@@ -67,10 +69,15 @@ class DQNAgent:
 
 # --- NS3 Environment ---
 port = 5555
-simTime = 10
-stepTime = 0.1
+simTime = 12
+stepTime = 0.01
 seed = 123
 nodeNum = 5
+
+if 2 >= simTime:
+    raise ValueError("All simulation time will be spent on warm-up")
+warmup_iterations = ceil(2 / stepTime)
+real_sim_time = (simTime - 2) / stepTime
 
 env = ns3env.Ns3Env(port=port, stepTime=stepTime, startSim=True, simSeed=seed,
                     simArgs={"--simTime": simTime, "--nodeNum": nodeNum}, debug=False)
@@ -80,7 +87,6 @@ action_size = env.action_space.shape[0]
 
 agent = DQNAgent(state_size, action_size)
 episodes = 50
-max_steps = 100
 episode_rewards = []
 episode_cws = []
 episode_throughputs = []
@@ -93,17 +99,21 @@ for e in range(episodes):
     collisions = []
 
     raw_state = env.reset()
-    collision_prob = raw_state[1] / 256.0         
+    collision_prob = raw_state[1] / 255.0         
     log2_queued = raw_state[0]           
     state = np.array([collision_prob, log2_queued])
 
     total_reward = 0
 
-    for t in range(max_steps):
+    for _ in range(warmup_iterations):
+        env.step([7, 7, 7, 7, 7, 7])
+    done = False
+
+    while not done:
         action = agent.act(state)
         next_raw_state, reward, done, _ = env.step(action.tolist())
 
-        collision_prob = next_raw_state[1] / 256.0  
+        collision_prob = next_raw_state[1] / 255.0  
         log2_queued = next_raw_state[0] 
         next_state = np.array([collision_prob, log2_queued])
 
@@ -112,10 +122,10 @@ for e in range(episodes):
         total_reward += reward
         cws.append(np.mean(action)) 
         throughputs.append(reward)  
-        collisions.append(next_raw_state[1] / 256.0) 
-
+        collisions.append(next_raw_state[1] / 255.0) 
 
         if done:
+            total_reward = total_reward / real_sim_time
             print(f"Episode {e+1}/{episodes} - reward: {total_reward}, epsilon: {agent.epsilon:.3f}")
             break
 
