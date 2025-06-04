@@ -12,7 +12,7 @@ from math import ceil
 
 # --- DQN Agent Class ---
 class DQNAgent:
-    def __init__(self, state_size, action_size, cw_min=1, cw_max=100):
+    def __init__(self, state_size, action_size, cw_min=0, cw_max=6):
         self.state_size = state_size
         self.action_size = action_size
         self.cw_min = cw_min
@@ -22,8 +22,8 @@ class DQNAgent:
         self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.001
+        self.epsilon_decay = 0.8
+        self.learning_rate = 0.01
         self.batch_size = 64
 
         self.model = self._build_model()
@@ -43,9 +43,9 @@ class DQNAgent:
 
     def act(self, state):
         if np.random.rand() <= self.epsilon:
-            return np.random.randint(self.cw_min, self.cw_max+1, size=self.action_size)
-        q_values = self.model.predict(np.array([state]), verbose=0)[0]
-        return np.clip(np.round(q_values), self.cw_min, self.cw_max).astype(int)
+            return [np.random.randint(self.cw_min, self.cw_max+1)]
+        q = self.model.predict(np.array([state]), verbose=0)[0]
+        return np.clip(np.round(q), self.cw_min, self.cw_max).astype(int)
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
@@ -71,22 +71,31 @@ class DQNAgent:
 port = 5555
 simTime = 12
 stepTime = 0.01
-seed = 123
-nodeNum = 5
+seed = 0
+startSim = True
+debug = False
 
 if 2 >= simTime:
     raise ValueError("All simulation time will be spent on warm-up")
 warmup_iterations = ceil(2 / stepTime)
 real_sim_time = (simTime - 2) / stepTime
 
-env = ns3env.Ns3Env(port=port, stepTime=stepTime, startSim=True, simSeed=seed,
-                    simArgs={"--simTime": simTime, "--nodeNum": nodeNum}, debug=False)
+simArgs = {"--simTime": simTime}
+
+env = ns3env.Ns3Env(
+    port=port,
+    stepTime=stepTime,
+    startSim=startSim,
+    simSeed=seed,
+    simArgs=simArgs,
+    debug=debug,
+)
 
 state_size = 2  # collision_prob i log2_queued_packets
-action_size = env.action_space.shape[0]
+action_size = 1
 
 agent = DQNAgent(state_size, action_size)
-episodes = 50
+episodes = 10
 episode_rewards = []
 episode_cws = []
 episode_throughputs = []
@@ -99,22 +108,22 @@ for e in range(episodes):
     collisions = []
 
     raw_state = env.reset()
-    collision_prob = raw_state[1] / 255.0         
-    log2_queued = raw_state[0]           
+    collision_prob =  raw_state & 255
+    log2_queued = raw_state >> 8
     state = np.array([collision_prob, log2_queued])
 
     total_reward = 0
 
     for _ in range(warmup_iterations):
-        env.step([7, 7, 7, 7, 7, 7])
+        env.step(0)
     done = False
 
     while not done:
         action = agent.act(state)
-        next_raw_state, reward, done, _ = env.step(action.tolist())
+        next_raw_state, reward, done, _ = env.step(action[0])
 
-        collision_prob = next_raw_state[1] / 255.0  
-        log2_queued = next_raw_state[0] 
+        collision_prob =  next_raw_state & 255
+        log2_queued = next_raw_state >> 8
         next_state = np.array([collision_prob, log2_queued])
 
         agent.remember(state, action, reward, next_state, done)
@@ -122,7 +131,7 @@ for e in range(episodes):
         total_reward += reward
         cws.append(np.mean(action)) 
         throughputs.append(reward)  
-        collisions.append(next_raw_state[1] / 255.0) 
+        collisions.append(collision_prob) 
 
         if done:
             total_reward = total_reward / real_sim_time
