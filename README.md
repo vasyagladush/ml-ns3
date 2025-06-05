@@ -16,6 +16,8 @@ Graphs showing obtained results can be found in:
 
 1. Build image with ns3-gym env:
 
+**There is no benefit to performing this step if the container has already been built and is not missing.**
+
 ```
 docker build -t ns3-gym-env .
 ```
@@ -32,19 +34,36 @@ docker run -it --rm -v ./examples:/ns-allinone-3.40/ns-3.40/contrib/opengym/exam
 source ../ns3gym-venv/bin/activate
 ```
 
-And it might be needed to install some new python libraries, e.g.:
+4. Change directory to appropriate directory:
 
 ```console
-pip install matplotlib
+cd ./our_rl/ql
 ```
-
-4. Run the thing, e.g.
+OR
 
 ```console
-cd ./our_rl/ql && ./qlearn.py
+cd ./our_rl/dqn
 ```
 
-5. Stop and exit the container: Ctrl + D
+5. Ensure all required Python modules are installed:
+
+```console
+pip install -r requirements.txt
+```
+
+6. Run the thing, e.g.
+
+_Both programs can be run as many times as desired without having to restart the container._
+
+```console
+./qlearn.py
+```
+
+OR
+
+```console
+./dqn.py
+```
 
 ## Sources:
 
