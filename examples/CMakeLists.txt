@@ -88,3 +88,14 @@ build_lib_example(
     ${libopengym}
     ${libwifi}
 )
+
+build_lib_example(
+  NAME baseline
+  SOURCE_FILES our_rl/baseline/sim.cc
+  LIBRARIES_TO_LINK
+    ${libapplications}
+    ${libcore}
+    ${libinternet}
+    ${libopengym}
+    ${libwifi}
+)
