@@ -10,7 +10,7 @@ Other directories in the `examples/` directory contain examples provided by ns3-
 ## Results
 
 Graphs showing obtained results can be found in:
-- [`examples/our_rl/baseline/results`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/baseline/results) - Baseline graphs
+- [`examples/our_rl/baseline/results`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/baseline/results) - Baseline graphs with CW min and CW max set to 15 and 1023 respectively
 - [`examples/our_rl/dqn`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/dqn) - DQN result graphs
 - [`examples/our_rl/ql/results`](https://github.com/vasyagladush/ml-ns3/tree/main/examples/our_rl/ql/results) - Q-Learning result graphs
 ## Use intructions
