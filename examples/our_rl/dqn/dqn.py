@@ -19,7 +19,8 @@ class DQNAgent:
         self.cw_max = cw_max
 
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.95
+        self.alpha = 0.7
+        self.gamma = 0.6
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.8
@@ -34,7 +35,11 @@ class DQNAgent:
         model = tf.keras.Sequential()
         model.add(layers.Dense(64, input_dim=self.state_size, activation='relu'))
         model.add(layers.Dense(64, activation='relu'))
-        model.add(layers.Dense(self.action_size, activation='linear'))  # dla CW każdego węzła
+        model.add(layers.Dense(64, activation='relu'))
+        model.add(layers.Dense(64, activation='relu'))
+        model.add(layers.Dense(64, activation='relu'))
+        model.add(layers.Dense(64, activation='relu'))
+        model.add(layers.Dense(1, activation='linear'))  # dla CW każdego węzła
         model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate))
         return model
 
@@ -43,12 +48,12 @@ class DQNAgent:
 
     def act(self, state):
         if np.random.rand() <= self.epsilon:
-            return [np.random.randint(self.cw_min, self.cw_max+1)]
-        q = self.model.predict(np.array([state]), verbose=0)[0]
-        return np.clip(np.round(q), self.cw_min, self.cw_max).astype(int)
+            return np.random.randint(self.cw_min, self.cw_max+1)
+        q_values = self.model.predict(np.array([state]), verbose=0)[0]
+        return np.clip(np.round(q_values), self.cw_min, self.cw_max).astype(int)[0]
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        self.memory.append((state, action, reward-action*self.alpha, next_state, done))
 
     def replay(self):
         if len(self.memory) < self.batch_size:
@@ -62,7 +67,7 @@ class DQNAgent:
             else:
                 t = self.target_model.predict(np.array([next_state]), verbose=0)[0]
                 target = reward + self.gamma * t
-            self.model.fit(np.array([state]), np.array([target]), epochs=1, verbose=0)
+            self.model.fit(np.array([state]), np.array([target]), epochs=5, verbose=0)
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -95,7 +100,7 @@ state_size = 2  # collision_prob i log2_queued_packets
 action_size = 1
 
 agent = DQNAgent(state_size, action_size)
-episodes = 10
+episodes = 30
 episode_rewards = []
 episode_cws = []
 episode_throughputs = []
@@ -120,7 +125,8 @@ for e in range(episodes):
 
     while not done:
         action = agent.act(state)
-        next_raw_state, reward, done, _ = env.step(action[0])
+        print(action)
+        next_raw_state, reward, done, _ = env.step(action)
 
         collision_prob =  next_raw_state & 255
         log2_queued = next_raw_state >> 8
